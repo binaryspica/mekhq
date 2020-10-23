@@ -258,7 +258,7 @@ public class TankLocation extends Part {
 
     @Override
     public void updateConditionFromPart() {
-        //shouldn't get here
+        ((Tank) unit.getEntity()).setInternal(((Tank) unit.getEntity()).getOInternal(loc) - damage, loc);
     }
 
     @Override
@@ -308,7 +308,7 @@ public class TankLocation extends Part {
         }
         String toReturn = "<html><font size='2'";
         String scheduled = "";
-        if (getTeamId() != null) {
+        if (getTech() != null) {
             scheduled = " (scheduled) ";
         }
 

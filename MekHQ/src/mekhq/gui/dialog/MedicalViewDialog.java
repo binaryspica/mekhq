@@ -37,7 +37,6 @@ import java.awt.event.MouseEvent;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.text.SimpleDateFormat;
 import java.time.Period;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -64,7 +63,6 @@ import mekhq.campaign.log.LogEntryType;
 import mekhq.gui.preferences.JWindowPreference;
 import mekhq.gui.view.Paperdoll;
 import mekhq.preferences.PreferencesNode;
-import mekhq.IconPackage;
 import mekhq.MekHQ;
 import mekhq.Utilities;
 import mekhq.campaign.Campaign;
@@ -80,13 +78,12 @@ import mekhq.campaign.personnel.Person;
 
 public class MedicalViewDialog extends JDialog {
     private static final long serialVersionUID = 6178230374580087883L;
-    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd"); // TODO : LocalDate : Remove me with the logs rework
-    private static final String MENU_CMD_SEPARATOR = ","; //$NON-NLS-1$
+    private static final String MENU_CMD_SEPARATOR = ",";
 
-    private static final ExtraData.Key<String> DOCTOR_NOTES = new ExtraData.StringKey("doctor_notes"); //$NON-NLS-1$
+    private static final ExtraData.Key<String> DOCTOR_NOTES = new ExtraData.StringKey("doctor_notes");
     // TODO: Custom paper dolls
     @SuppressWarnings("unused")
-    private static final ExtraData.Key<String> PAPERDOLL = new ExtraData.StringKey("paperdoll_xml_file"); //$NON-NLS-1$
+    private static final ExtraData.Key<String> PAPERDOLL = new ExtraData.StringKey("paperdoll_xml_file");
 
     private final Campaign campaign;
     private final Person person;
@@ -106,20 +103,19 @@ public class MedicalViewDialog extends JDialog {
     private transient Color labelColor;
     private transient ImageIcon healImageIcon;
 
-    public MedicalViewDialog(Window parent, Campaign c, Person p, IconPackage ip) {
+    public MedicalViewDialog(Window parent, Campaign c, Person p) {
         super();
         this.campaign = Objects.requireNonNull(c);
         this.person = Objects.requireNonNull(p);
-        //this.iconPackage = Objects.requireNonNull(ip);
-        resourceMap = ResourceBundle.getBundle("mekhq.resources.MedicalViewDialog", new EncodeControl()); //$NON-NLS-1$
+        resourceMap = ResourceBundle.getBundle("mekhq.resources.MedicalViewDialog", new EncodeControl());
 
         // Preload default paperdolls
-        try (InputStream fis = new FileInputStream(ip.getGuiElement("default_male_paperdoll"))) { //$NON-NLS-1$
+        try (InputStream fis = new FileInputStream(c.getApp().getIconPackage().getGuiElement("default_male_paperdoll"))) {
             defaultMaleDoll = new Paperdoll(fis);
         } catch (IOException e) {
-            MekHQ.getLogger().error(getClass(), "<init>(Window,Campaign,Person,IconPackage)", e); //$NON-NLS-1$
+            MekHQ.getLogger().error(getClass(), "<init>(Window,Campaign,Person,IconPackage)", e);
         }
-        try (InputStream fis = new FileInputStream(ip.getGuiElement("default_female_paperdoll"))) { //$NON-NLS-1$
+        try (InputStream fis = new FileInputStream(c.getApp().getIconPackage().getGuiElement("default_female_paperdoll"))) {
             defaultFemaleDoll = new Paperdoll(fis);
         } catch (IOException e) {
             MekHQ.getLogger().error(getClass(), "<init>(Window,Campaign,Person,IconPackage)", e); //$NON-NLS-1$
@@ -287,7 +283,7 @@ public class MedicalViewDialog extends JDialog {
             .filter(p::hasInjury)
             .forEach(bl -> {
                 if (person.isLocationMissing(bl) && !person.isLocationMissing(bl.Parent())) {
-                    doll.setLocTag(bl, "lost"); //$NON-NLS-1$
+                    doll.setLocTag(bl, "lost");
                 } else if (!person.isLocationMissing(bl)) {
                     InjuryLevel level = getMaxInjuryLevel(person, bl);
                     Color col;
@@ -337,7 +333,7 @@ public class MedicalViewDialog extends JDialog {
             surname = p.getBloodname();
         }
 
-        String birthdayString = campaign.getCampaignOptions().getDisplayFormattedDate(p.getBirthday());
+        String birthdayString = MekHQ.getMekHQOptions().getDisplayFormattedDate(p.getBirthday());
 
         Period age = Period.between(p.getBirthday(), c.getLocalDate());
 
@@ -365,13 +361,13 @@ public class MedicalViewDialog extends JDialog {
         panel.add(genWrittenPanel(p.getGender().isMale() ? resourceMap.getString("genderMale.text") : resourceMap.getString("genderFemale.text")));
         panel.add(genWrittenPanel(phenotype));
         panel.add(genLabel(resourceMap.getString("assignedTo.text")));
-        panel.add(genLabel("")); //$NON-NLS-1$
+        panel.add(genLabel(""));
         panel.add(genWrittenPanel(force));
-        panel.add(genWrittenPanel("")); //$NON-NLS-1$
-        panel.add(genLabel(resourceMap.getString("assignedDoctor.text"))); //$NON-NLS-1$
-        panel.add(genLabel(resourceMap.getString("lastCheckup.text"))); //$NON-NLS-1$
+        panel.add(genWrittenPanel(""));
+        panel.add(genLabel(resourceMap.getString("assignedDoctor.text")));
+        panel.add(genLabel(resourceMap.getString("lastCheckup.text")));
         panel.add(genWrittenPanel(doctor));
-        panel.add(genWrittenPanel("")); //$NON-NLS-1$
+        panel.add(genWrittenPanel(""));
         return panel;
     }
 
@@ -379,11 +375,11 @@ public class MedicalViewDialog extends JDialog {
         JPanel panel = new JPanel();
         panel.setOpaque(false);
         panel.setLayout(new BoxLayout(panel, BoxLayout.PAGE_AXIS));
-        panel.add(genLabel(resourceMap.getString("medicalHistory.text"))); //$NON-NLS-1$
+        panel.add(genLabel(resourceMap.getString("medicalHistory.text")));
         Map<String, List<LogEntry>> groupedEntries = p.getPersonnelLog().stream()
             .filter(entry -> entry.getType() == LogEntryType.MEDICAL)
             .sorted(Comparator.comparing(LogEntry::getDate))
-            .collect(Collectors.groupingBy(entry -> DATE_FORMAT.format(entry.getDate())));
+            .collect(Collectors.groupingBy(entry -> MekHQ.getMekHQOptions().getDisplayFormattedDate(entry.getDate())));
         groupedEntries.entrySet().stream()
             .filter(e -> !e.getValue().isEmpty())
             .sorted(Map.Entry.comparingByKey())
@@ -396,11 +392,11 @@ public class MedicalViewDialog extends JDialog {
                         wrapper.setOpaque(false);
                         wrapper.setAlignmentX(Component.LEFT_ALIGNMENT);
                         wrapper.add(Box.createHorizontalStrut(60));
-                        wrapper.add(genWrittenText(String.format(resourceMap.getString("historyText.format"), entry.getDesc()))); //$NON-NLS-1$
+                        wrapper.add(genWrittenText(String.format(resourceMap.getString("historyText.format"), entry.getDesc())));
                         panel.add(wrapper);
                     });
                 } else {
-                    panel.add(genWrittenText(String.format(resourceMap.getString("historyDateAndText.format"), e.getKey(), e.getValue().get(0).getDesc()))); //$NON-NLS-1$
+                    panel.add(genWrittenText(String.format(resourceMap.getString("historyDateAndText.format"), e.getKey(), e.getValue().get(0).getDesc())));
                 }
             });
         return panel;
@@ -466,15 +462,15 @@ public class MedicalViewDialog extends JDialog {
                     if (inj.getType().isPermanent()) {
                         injLabel = genWrittenText(String.format(resourceMap.getString("injuriesText.format"),
                                 inj.getType().getSimpleName(),
-                                c.getCampaignOptions().getDisplayFormattedDate(inj.getStart())));
+                                MekHQ.getMekHQOptions().getDisplayFormattedDate(inj.getStart())));
                     } else if (inj.isPermanent() || (inj.getTime() <= 0)) {
                         injLabel = genWrittenText(String.format(resourceMap.getString("injuriesPermanent.format"),
                                 inj.getType().getSimpleName(),
-                                c.getCampaignOptions().getDisplayFormattedDate(inj.getStart())));
+                                MekHQ.getMekHQOptions().getDisplayFormattedDate(inj.getStart())));
                     } else {
                         injLabel = genWrittenText(String.format(resourceMap.getString("injuriesTextAndDuration.format"),
                                 inj.getType().getSimpleName(),
-                                c.getCampaignOptions().getDisplayFormattedDate(inj.getStart()),
+                                MekHQ.getMekHQOptions().getDisplayFormattedDate(inj.getStart()),
                                 genTimePeriod(inj.getTime())));
                     }
 

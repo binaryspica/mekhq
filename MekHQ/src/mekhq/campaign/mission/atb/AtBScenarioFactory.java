@@ -21,10 +21,10 @@ package mekhq.campaign.mission.atb;
 import java.time.LocalDate;
 import java.util.*;
 
-import megamek.common.logging.LogLevel;
 import mekhq.MekHQ;
 import mekhq.Utilities;
 import mekhq.campaign.Campaign;
+import mekhq.campaign.againstTheBot.enums.AtBLanceRole;
 import mekhq.campaign.force.Lance;
 import mekhq.campaign.mission.*;
 import mekhq.campaign.mission.atb.scenario.AceDuelBuiltInScenario;
@@ -106,8 +106,8 @@ public class AtBScenarioFactory {
             s.initialize(c, lance, attacker, date);
 
             return s;
-        } catch (InstantiationException | IllegalAccessException e) {
-            MekHQ.getLogger().error(AtBScenarioFactory.class, "createScenario", e);
+        } catch (Exception e) {
+            MekHQ.getLogger().error(AtBScenarioFactory.class, e);
         }
 
         return null;
@@ -115,12 +115,10 @@ public class AtBScenarioFactory {
 
     @SuppressWarnings("unchecked")
     public static void registerScenario(IAtBScenario scenario) {
-        final String METHOD_NAME = "registerScenario(IAtBScenario)"; //$NON-NLS-1$
-
         if (!scenario.getClass().isAnnotationPresent(AtBScenarioEnabled.class)) {
-            MekHQ.getLogger().log(AtBScenarioFactory.class, METHOD_NAME, LogLevel.ERROR,
-                    String.format("Unable to register an AtBScenario of class '%s' because is does not have the '%s' annotation.", //$NON-NLS-1$
-            scenario.getClass().getName(), AtBScenarioEnabled.class.getName()));
+            MekHQ.getLogger().error(AtBScenarioFactory.class,
+                    String.format("Unable to register an AtBScenario of class '%s' because is does not have the '%s' annotation.",
+                            scenario.getClass().getName(), AtBScenarioEnabled.class.getName()));
         } else {
             int type = scenario.getScenarioType();
             List<Class<IAtBScenario>> list = scenarioMap.computeIfAbsent(type, k -> new ArrayList<>());
@@ -216,7 +214,7 @@ public class AtBScenarioFactory {
                     }
 
                     // Assign training experience
-                    if (lance.getRole() == Lance.ROLE_TRAINING) {
+                    if (lance.getRole() == AtBLanceRole.TRAINING) {
                         c.awardTrainingXP(lance);
                     }
 
@@ -260,7 +258,7 @@ public class AtBScenarioFactory {
                  */
                 List<Lance> lList = new ArrayList<>();
                 for (Lance l : lances.values()) {
-                    if ((l.getMissionId() == atbContract.getId()) && (l.getRole() == Lance.ROLE_DEFEND)
+                    if ((l.getMissionId() == atbContract.getId()) && (l.getRole() == AtBLanceRole.DEFENCE)
                             && l.isEligible(c)) {
                         lList.add(l);
                     }
@@ -312,13 +310,11 @@ public class AtBScenarioFactory {
                             assignedLances.add(lance.getForceId());
                         }
                     } else {
-                        MekHQ.getLogger().error(AtBScenarioFactory.class, "createScenariosForNewWeek",
-                                "Unable to generate Base Attack scenario.");
+                        MekHQ.getLogger().error(AtBScenarioFactory.class, "Unable to generate Base Attack scenario.");
                     }
                 } else {
-                    MekHQ.getLogger().warning(AtBScenarioFactory.class, "createScenariosForNewWeek",
-                            "No lances assigned to mission " + atbContract.getName() +
-                                    ". Can't generate an Invincible Morale base defence mission for this force.");
+                    MekHQ.getLogger().warning(AtBScenarioFactory.class, "No lances assigned to mission "
+                            + atbContract.getName() + ". Can't generate an Invincible Morale base defence mission for this force.");
                 }
             }
             //endregion Invincible Morale Missions

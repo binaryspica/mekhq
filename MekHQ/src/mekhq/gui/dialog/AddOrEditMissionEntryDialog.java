@@ -27,10 +27,8 @@ import mekhq.preferences.PreferencesNode;
 
 import javax.swing.*;
 import java.awt.*;
-import java.text.SimpleDateFormat;
-import java.time.ZoneId;
-import java.util.Date;
-import java.util.GregorianCalendar;
+import java.awt.event.ActionEvent;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.ResourceBundle;
 
@@ -44,9 +42,9 @@ public class AddOrEditMissionEntryDialog extends JDialog {
     private JFrame frame;
     private int operationType;
     private LogEntry entry;
-    private Date originalDate;
+    private LocalDate originalDate;
     private String originalDescription;
-    private Date newDate;
+    private LocalDate newDate;
 
     private JPanel panMain;
     private JButton btnDate;
@@ -55,7 +53,7 @@ public class AddOrEditMissionEntryDialog extends JDialog {
     private JButton btnOK;
     private JButton btnClose;
 
-    public AddOrEditMissionEntryDialog(JFrame parent, boolean modal, Date entryDate) {
+    public AddOrEditMissionEntryDialog(JFrame parent, boolean modal, LocalDate entryDate) {
         this(parent, modal, ADD_OPERATION, new ServiceLogEntry(entryDate, ""));
     }
 
@@ -109,7 +107,7 @@ public class AddOrEditMissionEntryDialog extends JDialog {
         panBtn.setLayout(new GridLayout(0,2));
 
         btnDate = new JButton();
-        btnDate.setText(getDateAsString(newDate));
+        btnDate.setText(MekHQ.getMekHQOptions().getDisplayFormattedDate(newDate));
         btnDate.addActionListener(evt -> changeDate());
         gridBagConstraints = new GridBagConstraints();
         gridBagConstraints.gridx = 0;
@@ -160,29 +158,22 @@ public class AddOrEditMissionEntryDialog extends JDialog {
     }
 
     private void changeDate() {
-        GregorianCalendar cal = new GregorianCalendar();
-        cal.setTime(newDate);
-        DateChooser dc = new DateChooser(frame, cal.toZonedDateTime().toLocalDate());
+        DateChooser dc = new DateChooser(frame, newDate);
         if (dc.showDateChooser() == DateChooser.OK_OPTION) {
-            newDate = GregorianCalendar.from(dc.getDate().atStartOfDay(ZoneId.systemDefault())).getTime();
-            btnDate.setText(getDateAsString(newDate));
+            newDate = dc.getDate();
+            btnDate.setText(MekHQ.getMekHQOptions().getDisplayFormattedDate(newDate));
         }
     }
 
-    private void btnOKActionPerformed(java.awt.event.ActionEvent evt) {
+    private void btnOKActionPerformed(ActionEvent evt) {
         entry.setDate(newDate);
         entry.setDesc(txtDesc.getText());
         entry.onLogEntryEdited(originalDate, newDate, originalDescription, txtDesc.getText(), null);
         this.setVisible(false);
     }
 
-    private void btnCloseActionPerformed(java.awt.event.ActionEvent evt) {
+    private void btnCloseActionPerformed(ActionEvent evt) {
         entry = null;
         this.setVisible(false);
-    }
-
-    private static String getDateAsString(Date date) {
-        SimpleDateFormat dateFormat = new SimpleDateFormat("MMMM d yyyy");
-        return dateFormat.format(date);
     }
 }

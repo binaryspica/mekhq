@@ -10,15 +10,14 @@
  *
  * MekHQ is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with MekHQ.  If not, see <http://www.gnu.org/licenses/>.
+ * along with MekHQ. If not, see <http://www.gnu.org/licenses/>.
  */
 package mekhq.campaign.personnel.enums;
 
-import megamek.common.logging.LogLevel;
 import megamek.common.util.EncodeControl;
 import megamek.common.util.StringUtil;
 import megamek.common.util.WeightedMap;
@@ -191,8 +190,7 @@ public enum Marriage {
                 break;
             case WEIGHTED:
             default:
-                MekHQ.getLogger().log(getClass(), "marry", LogLevel.ERROR,
-                        String.format("Marriage Surname Style is not defined, and cannot be used \"%s\" and \"%s\"",
+                MekHQ.getLogger().error(this, String.format("Marriage Surname Style is not defined, and cannot be used \"%s\" and \"%s\"",
                                 origin.getFullName(), spouse.getFullName()));
                 break;
         }
@@ -205,15 +203,15 @@ public enum Marriage {
         spouse.getGenealogy().setSpouse(origin.getId());
 
         // Then we do the logging
-        PersonalLogger.marriage(origin, spouse, campaign.getDate());
-        PersonalLogger.marriage(spouse, origin, campaign.getDate());
+        PersonalLogger.marriage(origin, spouse, campaign.getLocalDate());
+        PersonalLogger.marriage(spouse, origin, campaign.getLocalDate());
 
         if (campaign.getCampaignOptions().logMarriageNameChange()) {
             if (!spouse.getSurname().equals(spouseSurname)) {
-                PersonalLogger.marriageNameChange(spouse, origin, campaign.getDate());
+                PersonalLogger.marriageNameChange(spouse, origin, campaign.getLocalDate());
             }
             if (!origin.getSurname().equals(surname)) {
-                PersonalLogger.marriageNameChange(origin, spouse, campaign.getDate());
+                PersonalLogger.marriageNameChange(origin, spouse, campaign.getLocalDate());
             }
         }
 

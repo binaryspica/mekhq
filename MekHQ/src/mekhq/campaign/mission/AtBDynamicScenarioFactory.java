@@ -32,6 +32,7 @@ import megamek.client.generator.RandomGenderGenerator;
 import megamek.common.IPlayer;
 import megamek.common.MechSummaryCache;
 import megamek.common.enums.Gender;
+import megamek.common.icons.Camouflage;
 import megamek.common.util.StringUtil;
 
 import megamek.client.Client;
@@ -57,10 +58,9 @@ import megamek.common.PlanetaryConditions;
 import megamek.common.Transporter;
 import megamek.common.TroopSpace;
 import megamek.common.UnitType;
-import megamek.common.logging.LogLevel;
 import mekhq.MekHQ;
 import mekhq.Utilities;
-import mekhq.campaign.AtBConfiguration;
+import mekhq.campaign.againstTheBot.AtBConfiguration;
 import mekhq.campaign.Campaign;
 import mekhq.campaign.force.Force;
 import mekhq.campaign.force.Lance;
@@ -221,7 +221,6 @@ public class AtBDynamicScenarioFactory {
      * @return How many "lances" or other individual units were generated.
      */
     private static int generateForces(AtBDynamicScenario scenario, AtBContract contract, Campaign campaign, int weightClass) {
-
         int generatedLanceCount = 0;
         List<ScenarioForceTemplate> forceTemplates = scenario.getTemplate().getAllScenarioForces();
 
@@ -309,7 +308,7 @@ public class AtBDynamicScenarioFactory {
                 quality = scenario.getEffectiveOpforQuality();
                 break;
             default:
-                MekHQ.getLogger().log(AtBDynamicScenarioFactory.class, "generateForce", LogLevel.WARNING,
+                MekHQ.getLogger().warning(AtBDynamicScenarioFactory.class,
                         String.format("Invalid force alignment %d", forceTemplate.getForceAlignment()));
         }
 
@@ -397,7 +396,7 @@ public class AtBDynamicScenarioFactory {
             // no reason to go into an endless loop if we can't generate a lance
             if (generatedLance.isEmpty()) {
                 stopGenerating = true;
-                MekHQ.getLogger().log(AtBDynamicScenarioFactory.class, "generateForces", LogLevel.WARNING,
+                MekHQ.getLogger().warning(AtBDynamicScenarioFactory.class,
                         String.format("Unable to generate units from RAT: %s, type %d, max weight %d",
                                 factionCode, forceTemplate.getAllowedUnitType(), weightClass));
                 continue;
@@ -506,7 +505,7 @@ public class AtBDynamicScenarioFactory {
                     scenario.getBotUnitTemplates().put(UUID.fromString(en.getExternalIdAsString()), forceTemplate);
 
                     if (!campaign.getCampaignOptions().getAttachedPlayerCamouflage()) {
-                        en.setCamoCategory(IPlayer.NO_CAMO);
+                        en.setCamoCategory(Camouflage.NO_CAMOUFLAGE);
                         en.setCamoFileName(IPlayer.colorNames[scenario.getContract(campaign).getAllyColorIndex()]);
                     }
                 }
@@ -629,7 +628,7 @@ public class AtBDynamicScenarioFactory {
 
         for (int forceID : scenario.getPlayerForceTemplates().keySet()) {
             if (scenario.getPlayerForceTemplates().get(forceID).getContributesToUnitCount()) {
-                primaryUnitCount += campaign.getForce(forceID).getAllUnits().size();
+                primaryUnitCount += campaign.getForce(forceID).getAllUnits(true).size();
             }
         }
 
@@ -1133,7 +1132,12 @@ public class AtBDynamicScenarioFactory {
      * @param campaign
      * @return transportedUnits List of units being transported
      */
-    public static List<Entity> fillTransports(AtBScenario scenario, List<Entity> transports, String factionCode, int skill, int quality, Campaign campaign) {
+    public static List<Entity> fillTransports(AtBScenario scenario, List<Entity> transports,
+                                              String factionCode, int skill, int quality, Campaign campaign) {
+        if ((transports == null) || transports.isEmpty()) {
+            return new ArrayList<>();
+        }
+
         List<Entity> transportedUnits = new ArrayList<>();
 
         UnitGeneratorParameters params = new UnitGeneratorParameters();
@@ -1151,7 +1155,8 @@ public class AtBDynamicScenarioFactory {
     /**
      * Worker function that generates a battle armor unit to attach to a unit of clan mechs
      */
-    public static List<Entity> generateBAForNova(AtBScenario scenario, List<Entity> starUnits, String factionCode, int skill, int quality, Campaign campaign) {
+    public static List<Entity> generateBAForNova(AtBScenario scenario, List<Entity> starUnits,
+                                                 String factionCode, int skill, int quality, Campaign campaign) {
         List<Entity> transportedUnits = new ArrayList<>();
 
         // determine if this should be a nova
@@ -1256,8 +1261,6 @@ public class AtBDynamicScenarioFactory {
      */
     @SuppressWarnings(value = "unused")
     private static Entity getEntityByName(String name, String factionCode, int skill, Campaign campaign) {
-        final String METHOD_NAME = "getEntityByName(String,String,int,Campaign)";
-
         MechSummary mechSummary = MechSummaryCache.getInstance().getMech(name);
         if (mechSummary == null) {
             return null;
@@ -1274,14 +1277,12 @@ public class AtBDynamicScenarioFactory {
      * @return An crewed entity
      */
     public static Entity createEntityWithCrew(String factionCode, int skill, Campaign campaign, MechSummary ms) {
-        final String METHOD_NAME = "createEntityWithCrew(String,int,Campaign,MechSummary)";
         Entity en;
         try {
             en = new MechFileParser(ms.getSourceFile(), ms.getEntryName()).getEntity();
         } catch (Exception ex) {
-            MekHQ.getLogger().log(AtBDynamicScenarioFactory.class, METHOD_NAME, LogLevel.ERROR,
-                    "Unable to load entity: " + ms.getSourceFile() + ": " + ms.getEntryName() + ": " + ex.getMessage());
-            MekHQ.getLogger().error(AtBDynamicScenarioFactory.class, METHOD_NAME, ex);
+            MekHQ.getLogger().error(AtBDynamicScenarioFactory.class, "Unable to load entity: " + ms.getSourceFile() + ": " + ms.getEntryName() + ": " + ex.getMessage());
+            MekHQ.getLogger().error(AtBDynamicScenarioFactory.class, ex);
             return null;
         }
 
@@ -1546,7 +1547,7 @@ public class AtBDynamicScenarioFactory {
         String factionWeightString = AtBConfiguration.ORG_IS;
         if (genFaction.isClan() || faction.equals("MH")) {
             factionWeightString = AtBConfiguration.ORG_CLAN;
-        } else if (genFaction.isComstar()) {
+        } else if (genFaction.isComStar()) {
             factionWeightString = AtBConfiguration.ORG_CS;
         }
 
@@ -1718,7 +1719,7 @@ public class AtBDynamicScenarioFactory {
         // if so, we log a warning, then generate what we can.
         // having a longer weight string is not an issue, as we simply generate the first N units where N is the size of unitTypes.
         if (unitTypeSize > weights.length()) {
-            MekHQ.getLogger().error(AtBDynamicScenarioFactory.class, "generateLance",
+            MekHQ.getLogger().error(AtBDynamicScenarioFactory.class,
                     String.format("More unit types (%d) provided than weights (%d). Truncating generated lance.", unitTypes.size(), weights.length()));
             unitTypeSize = weights.length();
         }
@@ -1885,7 +1886,7 @@ public class AtBDynamicScenarioFactory {
         for (int forceID : scenario.getForceIDs()) {
             Force playerForce = campaign.getForce(forceID);
 
-            for (UUID unitID : playerForce.getAllUnits()) {
+            for (UUID unitID : playerForce.getAllUnits(true)) {
                 Unit currentUnit = campaign.getUnit(unitID);
                 if (currentUnit != null && (currentUnit.getEntity().getDeployRound() == ScenarioForceTemplate.ARRIVAL_TURN_STAGGERED)) {
                     staggeredEntities.add(currentUnit.getEntity());
@@ -1954,7 +1955,7 @@ public class AtBDynamicScenarioFactory {
             List<Entity> forceEntities = new ArrayList<>();
             Force playerForce = campaign.getForce(forceID);
 
-            for (UUID unitID : playerForce.getAllUnits()) {
+            for (UUID unitID : playerForce.getAllUnits(true)) {
                 Unit currentUnit = campaign.getUnit(unitID);
                 if (currentUnit != null) {
                     forceEntities.add(currentUnit.getEntity());
@@ -2015,7 +2016,7 @@ public class AtBDynamicScenarioFactory {
             List<Entity> forceEntities = new ArrayList<>();
             Force playerForce = campaign.getForce(forceID);
 
-            for (UUID unitID : playerForce.getAllUnits()) {
+            for (UUID unitID : playerForce.getAllUnits(true)) {
                 Unit currentUnit = campaign.getUnit(unitID);
                 if (currentUnit != null) {
                     forceEntities.add(currentUnit.getEntity());
@@ -2124,7 +2125,7 @@ public class AtBDynamicScenarioFactory {
      * @param entityList The list of entities to process.
      */
     private static void setDeploymentTurnsStaggeredByLance(List<Entity> entityList) {
-        MekHQ.getLogger().warning(AtBDynamicScenarioFactory.class, "setDeploymentTurnsStaggeredByLance", "Deployment Turn - Staggered by Lance not implemented");
+        MekHQ.getLogger().warning(AtBDynamicScenarioFactory.class, "Deployment Turn - Staggered by Lance not implemented");
     }
 
     /**
@@ -2223,7 +2224,7 @@ public class AtBDynamicScenarioFactory {
             if (faction.isClan() || factionCode.equals("MH")) {
                 return CLAN_MH_LANCE_SIZE;
             // comstar and wobbies use a fundamental unit size of 6.
-            } else if (faction.isComstar()) {
+            } else if (faction.isComStar()) {
                 return COMSTAR_LANCE_SIZE;
             }
         }

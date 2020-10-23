@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020  - The MegaMek Team. All Rights Reserved.
+ * Copyright (c) 2018, 2020 - The MegaMek Team. All Rights Reserved.
  *
  * This file is part of MekHQ.
  *
@@ -33,6 +33,7 @@ import javax.swing.event.MouseInputAdapter;
 import javax.swing.tree.TreePath;
 
 import megamek.common.util.StringUtil;
+import mekhq.MHQStaticDirectoryManager;
 import mekhq.gui.utilities.JMenuHelpers;
 import org.apache.commons.lang3.tuple.Pair;
 
@@ -53,6 +54,7 @@ import mekhq.campaign.mission.Mission;
 import mekhq.campaign.mission.Scenario;
 import mekhq.campaign.personnel.Person;
 import mekhq.campaign.personnel.SkillType;
+import mekhq.campaign.unit.HangarSorter;
 import mekhq.campaign.unit.Unit;
 import mekhq.gui.CampaignGUI;
 import mekhq.gui.dialog.CamoChoiceDialog;
@@ -112,11 +114,15 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
     private static final String CHANGE_DESC = "CHANGE_DESC";
     private static final String CHANGE_ICON = "CHANGE_ICON";
     private static final String CHANGE_NAME = "CHANGE_NAME";
+    private static final String CHANGE_COMBAT_STATUS = "CHANGE_COMBAT_STATUS";
+    private static final String CHANGE_COMBAT_STATUSES = "CHANGE_COMBAT_STATUSES";
 
     private static final String COMMAND_CHANGE_FORCE_CAMO = "CHANGE_CAMO|FORCE|empty|";
     private static final String COMMAND_CHANGE_FORCE_DESC = "CHANGE_DESC|FORCE|empty|";
     private static final String COMMAND_CHANGE_FORCE_ICON = "CHANGE_ICON|FORCE|empty|";
     private static final String COMMAND_CHANGE_FORCE_NAME = "CHANGE_NAME|FORCE|empty|";
+    private static final String COMMAND_CHANGE_FORCE_COMBAT_STATUS = "CHANGE_COMBAT_STATUS|FORCE|empty|";
+    private static final String COMMAND_CHANGE_FORCE_COMBAT_STATUSES = "CHANGE_COMBAT_STATUSES|FORCE|empty|";
 
     //C3 Network-related
     private static final String C3I = "C3I";
@@ -160,6 +166,8 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
     private static final String ASF_CARRIERS = "Aerospace Fighter Transports";
     private static final String SC_CARRIERS = "Small Craft Transports";
     private static final String VARIABLE_TRANSPORT = "%s Transports";
+
+    private static final int MAX_POPUP_ITEMS = 20;
 
     @Override
     public void actionPerformed(ActionEvent action) {
@@ -232,15 +240,15 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                     if (singleForce.getTechID() != null) {
                         Person oldTech = gui.getCampaign().getPerson(singleForce.getTechID());
                         oldTech.clearTechUnitIDs();
-                        ServiceLogger.removedFrom(oldTech, gui.getCampaign().getDate(), singleForce.getName());
+                        ServiceLogger.removedFrom(oldTech, gui.getCampaign().getLocalDate(), singleForce.getName());
                     }
                     singleForce.setTechID(tech.getId());
 
-                    ServiceLogger.assignedTo(tech, gui.getCampaign().getDate(), singleForce.getName());
+                    ServiceLogger.assignedTo(tech, gui.getCampaign().getLocalDate(), singleForce.getName());
 
-                    if (singleForce.getAllUnits() != null) {
+                    if (singleForce.getAllUnits(false) != null) {
                         String cantTech = "";
-                        for (UUID uuid : singleForce.getAllUnits()) {
+                        for (UUID uuid : singleForce.getAllUnits(false)) {
                             Unit u = gui.getCampaign().getUnit(uuid);
                             if (u != null) {
                                 if (tech.canTech(u.getEntity())) {
@@ -304,8 +312,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                     }
                 }
             }
-        }
-        if (command.contains(TOEMouseAdapter.ADD_UNIT)) {
+        } else if (command.contains(TOEMouseAdapter.ADD_UNIT)) {
             if (null != singleForce) {
                 Unit u = gui.getCampaign().getUnit(UUID.fromString(target));
                 if (null != u) {
@@ -322,7 +329,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
             Scenario scenario = gui.getCampaign().getScenario(sid);
 
             if (scenario instanceof AtBDynamicScenario) {
-                ForceTemplateAssignmentDialog ftad = new ForceTemplateAssignmentDialog(gui, forces, null, (AtBDynamicScenario) scenario);
+                new ForceTemplateAssignmentDialog(gui, forces, null, (AtBDynamicScenario) scenario);
             } else {
                 for (Force force : forces) {
                     gui.undeployForce(force);
@@ -330,7 +337,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                     if (null != scenario) {
                         scenario.addForces(force.getId());
                         force.setScenarioId(scenario.getId());
-                        for (UUID uid : force.getAllUnits()) {
+                        for (UUID uid : force.getAllUnits(true)) {
                             Unit u = gui.getCampaign().getUnit(uid);
                             if (null != u) {
                                 u.setScenarioId(scenario.getId());
@@ -344,7 +351,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
             if (null != singleForce) {
                 ImageChoiceDialog pcd = new ImageChoiceDialog(gui.getFrame(), true,
                         singleForce.getIconCategory(), singleForce.getIconFileName(),
-                        singleForce.getIconMap(), gui.getIconPackage().getForceIcons(), true);
+                        singleForce.getIconMap(), MHQStaticDirectoryManager.getForceIcons(), true);
                 pcd.setVisible(true);
                 if (pcd.isChanged()) {
                     singleForce.setIconCategory(pcd.getCategory());
@@ -360,7 +367,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                 ccd.setVisible(true);
 
                 if (ccd.clickedSelect()) {
-                    for (UUID id : singleForce.getAllUnits()) {
+                    for (UUID id : singleForce.getAllUnits(false)) {
                         Unit unit = gui.getCampaign().getUnit(id);
                         if (null != unit) {
                             unit.getEntity().setCamoCategory(ccd.getCategory());
@@ -393,6 +400,20 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                     MekHQ.triggerEvent(new OrganizationChangedEvent(singleForce));
                 }
             }
+        } else if (command.contains(TOEMouseAdapter.CHANGE_COMBAT_STATUSES)) {
+            if (singleForce != null) {
+                boolean combatForce = !singleForce.isCombatForce();
+                for (Force force : forces) {
+                    force.setCombatForce(combatForce, true);
+                }
+
+                gui.undeployForces(forces);
+            }
+        } else if (command.contains(TOEMouseAdapter.CHANGE_COMBAT_STATUS)) {
+            if (singleForce != null) {
+                singleForce.setCombatForce(!singleForce.isCombatForce(), false);
+                gui.undeployForce(singleForce);
+            }
         } else if (command.contains(TOEMouseAdapter.REMOVE_FORCE)) {
             for (Force force : forces) {
                 if (null != force && null != force.getParentForce()) {
@@ -404,7 +425,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                         return;
                     }
                     // Clear any transport assignments of units in the deleted force
-                    clearTransportAssignment(force.getAllUnits());
+                    clearTransportAssignment(force.getAllUnits(false));
 
                     gui.getCampaign().removeForce(force);
                 }
@@ -414,10 +435,10 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                 Person oldTech = gui.getCampaign().getPerson(singleForce.getTechID());
                 oldTech.clearTechUnitIDs();
 
-                ServiceLogger.removedFrom(oldTech, gui.getCampaign().getDate(), singleForce.getName());
+                ServiceLogger.removedFrom(oldTech, gui.getCampaign().getLocalDate(), singleForce.getName());
 
-                if (singleForce.getAllUnits() !=null) {
-                    for (UUID uuid : singleForce.getAllUnits()) {
+                if (singleForce.getAllUnits(false) !=null) {
+                    for (UUID uuid : singleForce.getAllUnits(false)) {
                         Unit u = gui.getCampaign().getUnit(uuid);
                         if (null != u.getTech()) {
                             u.removeTech();
@@ -459,8 +480,8 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
         } else if (command.contains(TOEMouseAdapter.DEPLOY_UNIT)) {
             int sid = Integer.parseInt(target);
             Scenario scenario = gui.getCampaign().getScenario(sid);
-            if(scenario instanceof AtBDynamicScenario) {
-                ForceTemplateAssignmentDialog ftad = new ForceTemplateAssignmentDialog(gui, null, units, (AtBDynamicScenario) scenario);
+            if (scenario instanceof AtBDynamicScenario) {
+                new ForceTemplateAssignmentDialog(gui, null, units, (AtBDynamicScenario) scenario);
             } else {
                 HashSet<Unit> extraUnits = new HashSet<>();
                 for (Unit unit : units) {
@@ -591,7 +612,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
             JMenuItem menuItem;
             JMenu menu;
             JTree tree = (JTree) e.getSource();
-            if (tree == null) {
+            if ((tree == null) || (tree.getSelectionPaths() == null)) {
                 return;
             }
             // this is a little tricky because we want to
@@ -614,10 +635,10 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                     uPath.add(path);
                 }
             }
-            for(Force force: forces) {
-                for(UUID id : force.getAllUnits()) {
+            for (Force force: forces) {
+                for (UUID id : force.getAllUnits(false)) {
                     Unit u = gui.getCampaign().getUnit(id);
-                    if(null != u) {
+                    if (null != u) {
                         unitsInForces.add(u);
                     }
                 }
@@ -639,26 +660,23 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
             boolean multipleSelection = (forcesSelected && forces.size() > 1) || (unitsSelected && units.size() > 1);
             if (forcesSelected) {
                 Force force = forces.get(0);
-                String forceIds = "" + force.getId();
+                StringBuilder forceIds = new StringBuilder("" + force.getId());
                 for (int i = 1; i < forces.size(); i++) {
-                    forceIds += "|" + forces.get(i).getId();
+                    forceIds.append("|").append(forces.get(i).getId());
                 }
                 if (!multipleSelection) {
                     menuItem = new JMenuItem("Change Name...");
-                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_CHANGE_FORCE_NAME
-                            + forceIds);
+                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_CHANGE_FORCE_NAME + forceIds);
                     menuItem.addActionListener(this);
                     menuItem.setEnabled(true);
                     popup.add(menuItem);
                     menuItem = new JMenuItem("Change Description...");
-                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_CHANGE_FORCE_DESC
-                            + forceIds);
+                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_CHANGE_FORCE_DESC + forceIds);
                     menuItem.addActionListener(this);
                     menuItem.setEnabled(true);
                     popup.add(menuItem);
                     menuItem = new JMenuItem("Add New Force...");
-                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_ADD_FORCE
-                            + forceIds);
+                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_ADD_FORCE + forceIds);
                     menuItem.addActionListener(this);
                     menuItem.setEnabled(true);
                     popup.add(menuItem);
@@ -700,13 +718,13 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                                     previousRole = role;
 
                                     // Adding menus if they aren't empty and adding scrollbars if they
-                                    // contain more than 20 items
-                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, eliteMenu, 20);
-                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, veteranMenu, 20);
-                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, regularMenu, 20);
-                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, greenMenu, 20);
-                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, ultraGreenMenu, 20);
-                                    JMenuHelpers.addMenuIfNonEmpty(menu, currentMenu, 20);
+                                    // contain more than MAX_POPUP_ITEMS items
+                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, eliteMenu, MAX_POPUP_ITEMS);
+                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, veteranMenu, MAX_POPUP_ITEMS);
+                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, regularMenu, MAX_POPUP_ITEMS);
+                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, greenMenu, MAX_POPUP_ITEMS);
+                                    JMenuHelpers.addMenuIfNonEmpty(currentMenu, ultraGreenMenu, MAX_POPUP_ITEMS);
+                                    JMenuHelpers.addMenuIfNonEmpty(menu, currentMenu, MAX_POPUP_ITEMS);
 
                                     eliteMenu = new JMenu(SkillType.ELITE_NM);
                                     veteranMenu = new JMenu(SkillType.VETERAN_NM);
@@ -750,17 +768,13 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                         }
 
                         // We need to add the last role to the menu after we assign the last tech
-                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, eliteMenu, 20);
-                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, veteranMenu, 20);
-                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, regularMenu, 20);
-                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, greenMenu, 20);
-                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, ultraGreenMenu, 20);
-                        JMenuHelpers.addMenuIfNonEmpty(menu, currentMenu, 20);
-
-                        // If the menu is not empty, we then add it to the popup
-                        if ((menu.getMenuComponentCount() > 0) || (menu.getItemCount() > 0)) {
-                            popup.add(menu);
-                        }
+                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, eliteMenu, MAX_POPUP_ITEMS);
+                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, veteranMenu, MAX_POPUP_ITEMS);
+                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, regularMenu, MAX_POPUP_ITEMS);
+                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, greenMenu, MAX_POPUP_ITEMS);
+                        JMenuHelpers.addMenuIfNonEmpty(currentMenu, ultraGreenMenu, MAX_POPUP_ITEMS);
+                        JMenuHelpers.addMenuIfNonEmpty(menu, currentMenu, MAX_POPUP_ITEMS);
+                        JMenuHelpers.addMenuIfNonEmpty(popup, menu, MAX_POPUP_ITEMS);
                     } else {
                         menuItem = new JMenuItem("Remove Tech from Force");
                         menuItem.setActionCommand(TOEMouseAdapter.COMMAND_REMOVE_LANCE_TECH + force.getTechID() + "|" + forceIds);
@@ -815,46 +829,42 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                     // Or Gun Emplacements!
                     // TODO: Or Robotic Systems!
                     JMenu unsorted = new JMenu("Unsorted");
-                    for (Unit u : gui.getCampaign().getUnits(true)) {
+
+                    HangarSorter.weightSorted().forEachUnit(gui.getCampaign().getHangar(), u -> {
                         String type = UnitType.getTypeName(u.getEntity().getUnitType());
                         String className = u.getEntity().getWeightClassName();
                         if (null != u.getCommander()) {
                             Person p = u.getCommander();
-                            if (p.getStatus().isActive() && (u.getForceId() < 1)
-                                    && u.isPresent()) {
-                                menuItem = new JMenuItem(p.getFullTitle()
-                                        + ", " + u.getName());
-                                menuItem.setActionCommand(TOEMouseAdapter.COMMAND_ADD_UNIT
-                                        + u.getId() + "|" + forceIds);
-                                menuItem.addActionListener(this);
-                                menuItem.setEnabled(u.isAvailable());
+                            if (p.getStatus().isActive() && (u.getForceId() < 1) && u.isPresent()) {
+                                JMenuItem menuItem0 = new JMenuItem(p.getFullTitle() + ", " + u.getName());
+                                menuItem0.setActionCommand(TOEMouseAdapter.COMMAND_ADD_UNIT + u.getId() + "|" + forceIds);
+                                menuItem0.addActionListener(this);
+                                menuItem0.setEnabled(u.isAvailable());
                                 if (null != weightClassForUnitType.get(type + "_" + className)) {
-                                    weightClassForUnitType.get(type + "_" + className).add(menuItem);
+                                    weightClassForUnitType.get(type + "_" + className).add(menuItem0);
                                     weightClassForUnitType.get(type + "_" + className).setEnabled(true);
                                 } else {
-                                    unsorted.add(menuItem);
+                                    unsorted.add(menuItem0);
                                 }
                                 unitTypeMenus.get(type).setEnabled(true);
                             }
                         }
                         if (u.getEntity() instanceof GunEmplacement) {
                             if (u.getForceId() < 1 && u.isPresent()) {
-                                menuItem = new JMenuItem("AutoTurret, "
-                                        + u.getName());
-                                menuItem.setActionCommand(TOEMouseAdapter.COMMAND_ADD_UNIT
-                                        + u.getId() + "|" + forceIds);
-                                menuItem.addActionListener(this);
-                                menuItem.setEnabled(u.isAvailable());
+                                JMenuItem menuItem0 = new JMenuItem("AutoTurret, " + u.getName());
+                                menuItem0.setActionCommand(TOEMouseAdapter.COMMAND_ADD_UNIT + u.getId() + "|" + forceIds);
+                                menuItem0.addActionListener(this);
+                                menuItem0.setEnabled(u.isAvailable());
                                 if (null != weightClassForUnitType.get(type + "_" + className)) {
-                                    weightClassForUnitType.get(type + "_" + className).add(menuItem);
+                                    weightClassForUnitType.get(type + "_" + className).add(menuItem0);
                                     weightClassForUnitType.get(type + "_" + className).setEnabled(true);
                                 } else {
-                                    unsorted.add(menuItem);
+                                    unsorted.add(menuItem0);
                                 }
                                 unitTypeMenus.get(type).setEnabled(true);
                             }
                         }
-                    }
+                    });
 
                     for (int i = 0; i < UnitType.SIZE; i++)
                     {
@@ -869,9 +879,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                                 }
 
                                 int weightClass = EntityWeightClass.getWeightClass(tonnage, unittype);
-                                JMenu tmp2 = weightClassForUnitType
-                                        .get(unittype + "_"
-                                                + EntityWeightClass.getClassName(weightClass, unittype, false));
+                                JMenu tmp2 = weightClassForUnitType.get(unittype + "_" + EntityWeightClass.getClassName(weightClass, unittype, false));
                                 if (tmp2.isEnabled()) {
                                     tmp.add(tmp2);
                                 }
@@ -886,9 +894,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                         JMenu tmp = unitTypeMenus.get(UnitType.getTypeName(ut));
                         if (tmp.isEnabled()) {
                             for (int wc = EntityWeightClass.WEIGHT_SMALL_SUPPORT; wc <= EntityWeightClass.WEIGHT_LARGE_SUPPORT; wc++) {
-                                JMenu tmp2 = weightClassForUnitType
-                                        .get(unittype + "_"
-                                                + EntityWeightClass.getClassName(wc, unittype, true));
+                                JMenu tmp2 = weightClassForUnitType.get(unittype + "_" + EntityWeightClass.getClassName(wc, unittype, true));
                                 if (tmp2.isEnabled()) {
                                     tmp.add(tmp2);
                                 }
@@ -901,25 +907,30 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                         menu.add(unsorted);
                         menu.setEnabled(true);
                     }
+                    JMenuHelpers.addMenuIfNonEmpty(popup, menu, MAX_POPUP_ITEMS);
 
-                    if (menu.getMenuComponentCount() > 0 || menu.getItemCount() > 0) {
-                        MenuScroller.createScrollBarsOnMenus(menu);
-                        popup.add(menu);
-                    }
                     menuItem = new JMenuItem("Change Force Icon...");
-                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_CHANGE_FORCE_ICON
-                            + forceIds);
+                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_CHANGE_FORCE_ICON + forceIds);
                     menuItem.addActionListener(this);
-                    menuItem.setEnabled(true);
                     popup.add(menuItem);
 
                     menuItem = new JMenuItem("Change Force Camo...");
                     menuItem.setActionCommand(TOEMouseAdapter.COMMAND_CHANGE_FORCE_CAMO + forceIds);
                     menuItem.addActionListener(this);
-                    menuItem.setEnabled(true);
                     popup.add(menuItem);
                 }
-                if (StaticChecks.areAllForcesUndeployed(forces)) {
+
+                menuItem = new JMenuItem(force.isCombatForce() ? "Make Non-Combat Force" : "Make Combat Force");
+                menuItem.setActionCommand(COMMAND_CHANGE_FORCE_COMBAT_STATUS + forceIds);
+                menuItem.addActionListener(this);
+                popup.add(menuItem);
+
+                menuItem = new JMenuItem(force.isCombatForce() ? "Make Force and Subforces Non-Combat Forces" : "Make Force and Subforces Combat Forces");
+                menuItem.setActionCommand(COMMAND_CHANGE_FORCE_COMBAT_STATUSES + forceIds);
+                menuItem.addActionListener(this);
+                popup.add(menuItem);
+
+                if (StaticChecks.areAllForcesUndeployed(forces) && StaticChecks.areAllCombatForces(forces)) {
                     menu = new JMenu("Deploy Force");
                     menu.setEnabled(false);
                     JMenu missionMenu;
@@ -930,38 +941,26 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
                         missionMenu = new JMenu(m.getName());
                         for (Scenario s : m.getScenarios()) {
                             if (s.isCurrent()) {
-                                if (gui.getCampaign().getCampaignOptions()
-                                        .getUseAtB()
-                                        && s instanceof AtBScenario
-                                        && !((AtBScenario) s)
-                                        .canDeployForces(forces,
-                                                gui.getCampaign())) {
+                                if (gui.getCampaign().getCampaignOptions().getUseAtB()
+                                        && (s instanceof AtBScenario)
+                                        && !((AtBScenario) s).canDeployForces(forces, gui.getCampaign())) {
                                     continue;
                                 }
                                 menuItem = new JMenuItem(s.getName());
-                                menuItem.setActionCommand(TOEMouseAdapter.COMMAND_DEPLOY_FORCE
-                                        + s.getId() + "|" + forceIds);
+                                menuItem.setActionCommand(TOEMouseAdapter.COMMAND_DEPLOY_FORCE + s.getId() + "|" + forceIds);
                                 menuItem.addActionListener(this);
-                                menuItem.setEnabled(true);
                                 missionMenu.add(menuItem);
                                 menu.setEnabled(true);
                             }
                         }
-                        menu.add(missionMenu);
+                        JMenuHelpers.addMenuIfNonEmpty(menu, missionMenu, MAX_POPUP_ITEMS);
                     }
-
-
-                    if (menu.getMenuComponentCount() > 0 || menu.getItemCount() > 0) {
-                        MenuScroller.createScrollBarsOnMenus(menu);
-                        popup.add(menu);
-                    }
+                    JMenuHelpers.addMenuIfNonEmpty(popup, menu, MAX_POPUP_ITEMS);
                 }
                 if (StaticChecks.areAllForcesDeployed(forces)) {
                     menuItem = new JMenuItem("Undeploy Force");
-                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_UNDEPLOY_FORCE
-                            + forceIds);
+                    menuItem.setActionCommand(TOEMouseAdapter.COMMAND_UNDEPLOY_FORCE + forceIds);
                     menuItem.addActionListener(this);
-                    menuItem.setEnabled(true);
                     popup.add(menuItem);
                 }
                 menuItem = new JMenuItem("Remove Force");
@@ -1508,7 +1507,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
         String fileName = gui.getCampaign().getCamoFileName();
 
         // Gather the most used camo category/file name for the force
-        Optional<Pair<String, String>> used = force.getAllUnits().stream()
+        Optional<Pair<String, String>> used = force.getAllUnits(false).stream()
             .map(id -> gui.getCampaign().getUnit(id))
             .filter(Objects::nonNull)
             .map(Unit::getEntity)
@@ -1530,7 +1529,7 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
         }
 
         return new CamoChoiceDialog(gui.getFrame(), true, category, fileName,
-            gui.getCampaign().getColorIndex(), gui.getIconPackage().getCamos());
+            gui.getCampaign().getColorIndex());
     }
 
     /**
@@ -1581,7 +1580,6 @@ public class TOEMouseAdapter extends MouseInputAdapter implements ActionListener
         JMenuItem menuItem = new JMenuItem(shipName + " , Space available: " + capacity);
         menuItem.setActionCommand(TOEMouseAdapter.COMMAND_ASSIGN_TO_SHIP + shipId + "|" + unitIds);
         menuItem.addActionListener(this);
-        menuItem.setEnabled(true);
 
         return menuItem;
     }

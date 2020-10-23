@@ -34,6 +34,8 @@ import java.util.ResourceBundle;
 import javax.swing.*;
 import javax.swing.table.TableColumn;
 
+import mekhq.campaign.finances.Asset;
+import mekhq.campaign.finances.FinancialReport;
 import mekhq.campaign.finances.Money;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartPanel;
@@ -116,7 +118,7 @@ public final class FinancesTab extends CampaignGuiTab {
         ChartPanel financeAmountPanel = (ChartPanel) createGraphPanel(GraphType.BALANCE_AMOUNT);
         ChartPanel financeMonthlyPanel = (ChartPanel) createGraphPanel(GraphType.MONTHLY_FINANCES);
 
-        financeModel = new FinanceTableModel(getCampaign());
+        financeModel = new FinanceTableModel();
         financeTable = new JTable(financeModel);
         financeTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         financeTable.addMouseListener(new FinanceTableMouseAdapter(getCampaignGui(),
@@ -131,13 +133,12 @@ public final class FinancesTab extends CampaignGuiTab {
         financeTable.setIntercellSpacing(new Dimension(0, 0));
         financeTable.setShowGrid(false);
 
-        loanModel = new LoanTableModel(getCampaign());
+        loanModel = new LoanTableModel();
         loanTable = new JTable(loanModel);
         loanTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         loanTable.addMouseListener(new LoanTableMouseAdapter(getCampaignGui(),
                 loanTable, loanModel));
         loanTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        column = null;
         for (int i = 0; i < LoanTableModel.N_COL; i++) {
             column = loanTable.getColumnModel().getColumn(i);
             column.setPreferredWidth(loanModel.getColumnWidth(i));
@@ -206,7 +207,7 @@ public final class FinancesTab extends CampaignGuiTab {
         areaNetWorth.setLineWrap(true);
         areaNetWorth.setWrapStyleWord(true);
         areaNetWorth.setFont(new Font("Courier New", Font.PLAIN, 12));
-        areaNetWorth.setText(getCampaign().getFormattedFinancialReport());
+        areaNetWorth.setText(getFormattedFinancialReport());
         areaNetWorth.setEditable(false);
 
         JScrollPane descriptionScroll = new JScrollPane(areaNetWorth);
@@ -247,7 +248,7 @@ public final class FinancesTab extends CampaignGuiTab {
     }
 
     private CategoryDataset setupMonthlyDataset() {
-        DateTimeFormatter df = DateTimeFormatter.ofPattern("MMM-yyy"); // TOOD : LocalDate : Remove Inline Date Format
+        DateTimeFormatter df = DateTimeFormatter.ofPattern("MMM-yyy");
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
         List<Transaction> transactions = getCampaign().getFinances().getAllTransactions();
 
@@ -401,9 +402,112 @@ public final class FinancesTab extends CampaignGuiTab {
 
     public void refreshFinancialReport() {
         SwingUtilities.invokeLater(() -> {
-            areaNetWorth.setText(getCampaign().getFormattedFinancialReport());
+            areaNetWorth.setText(getFormattedFinancialReport());
             areaNetWorth.setCaretPosition(0);
         });
+    }
+
+    public String getFormattedFinancialReport() {
+        StringBuilder sb = new StringBuilder();
+
+        FinancialReport r = FinancialReport.calculate(getCampaign());
+
+        Money liabilities = r.getTotalLiabilities();
+        Money assets = r.getTotalAssets();
+        Money netWorth = r.getNetWorth();
+
+        int longest = Math.max(
+                liabilities.toAmountAndSymbolString().length(),
+                assets.toAmountAndSymbolString().length());
+        longest = Math.max(
+                netWorth.toAmountAndSymbolString().length(),
+                longest);
+        String formatted = "%1$" + longest + "s";
+        sb.append("Net Worth................ ")
+                .append(String.format(formatted, netWorth.toAmountAndSymbolString())).append("\n\n");
+        sb.append("    Assets............... ")
+                .append(String.format(formatted, assets.toAmountAndSymbolString())).append("\n");
+        sb.append("       Cash.............. ")
+                .append(String.format(formatted, r.getCash().toAmountAndSymbolString())).append("\n");
+        if (r.getMechValue().isPositive()) {
+            sb.append("       Mechs............. ")
+                    .append(String.format(formatted, r.getMechValue().toAmountAndSymbolString())).append("\n");
+        }
+        if (r.getVeeValue().isPositive()) {
+            sb.append("       Vehicles.......... ")
+                    .append(String.format(formatted, r.getVeeValue().toAmountAndSymbolString())).append("\n");
+        }
+        if (r.getBattleArmorValue().isPositive()) {
+            sb.append("       BattleArmor....... ")
+                    .append(String.format(formatted, r.getBattleArmorValue().toAmountAndSymbolString())).append("\n");
+        }
+        if (r.getInfantryValue().isPositive()) {
+            sb.append("       Infantry.......... ")
+                    .append(String.format(formatted, r.getInfantryValue().toAmountAndSymbolString())).append("\n");
+        }
+        if (r.getProtomechValue().isPositive()) {
+            sb.append("       Protomechs........ ")
+                    .append(String.format(formatted, r.getProtomechValue().toAmountAndSymbolString())).append("\n");
+        }
+        if (r.getSmallCraftValue().isPositive()) {
+            sb.append("       Small Craft....... ")
+                    .append(String.format(formatted, r.getSmallCraftValue().toAmountAndSymbolString())).append("\n");
+        }
+        if (r.getLargeCraftValue().isPositive()) {
+            sb.append("       Large Craft....... ")
+                    .append(String.format(formatted, r.getLargeCraftValue().toAmountAndSymbolString())).append("\n");
+        }
+        sb.append("       Spare Parts....... ")
+                .append(String.format(formatted, r.getSparePartsValue().toAmountAndSymbolString())).append("\n");
+
+        if (getCampaign().getFinances().getAllAssets().size() > 0) {
+            for (Asset asset : getCampaign().getFinances().getAllAssets()) {
+                String assetName = asset.getName();
+                if (assetName.length() > 18) {
+                    assetName = assetName.substring(0, 17);
+                } else {
+                    int numPeriods = 18 - assetName.length();
+                    for (int i = 0; i < numPeriods; i++) {
+                        assetName += ".";
+                    }
+                }
+                assetName += " ";
+                sb.append("       ").append(assetName)
+                        .append(String.format(formatted, asset.getValue().toAmountAndSymbolString()))
+                        .append("\n");
+            }
+        }
+        sb.append("\n");
+        sb.append("    Liabilities.......... ")
+                .append(String.format(formatted, liabilities.toAmountAndSymbolString())).append("\n");
+        sb.append("       Loans............. ")
+                .append(String.format(formatted, r.getLoans().toAmountAndSymbolString())).append("\n\n\n");
+
+        sb.append("Monthly Profit........... ")
+                .append(String.format(formatted, r.getMonthlyIncome().minus(r.getMonthlyExpenses()).toAmountAndSymbolString()))
+                .append("\n\n");
+        sb.append("Monthly Income........... ")
+                .append(String.format(formatted, r.getMonthlyIncome().toAmountAndSymbolString())).append("\n");
+        sb.append("    Contract Payments.... ")
+                .append(String.format(formatted, r.getContracts().toAmountAndSymbolString())).append("\n\n");
+        sb.append("Monthly Expenses......... ")
+                .append(String.format(formatted, r.getMonthlyExpenses().toAmountAndSymbolString())).append("\n");
+        sb.append("    Salaries............. ")
+                .append(String.format(formatted, r.getSalaries().toAmountAndSymbolString())).append("\n");
+        sb.append("    Maintenance.......... ")
+                .append(String.format(formatted, r.getMaintenance().toAmountAndSymbolString())).append("\n");
+        sb.append("    Overhead............. ")
+                .append(String.format(formatted, r.getOverheadCosts().toAmountAndSymbolString())).append("\n");
+        if (getCampaign().getCampaignOptions().usePeacetimeCost()) {
+            sb.append("    Spare Parts.......... ")
+                    .append(String.format(formatted, r.getMonthlySparePartCosts().toAmountAndSymbolString())).append("\n");
+            sb.append("    Training Munitions... ")
+                    .append(String.format(formatted, r.getMonthlyAmmoCosts().toAmountAndSymbolString())).append("\n");
+            sb.append("    Fuel................. ")
+                    .append(String.format(formatted, r.getMonthlyFuelCosts().toAmountAndSymbolString())).append("\n");
+        }
+
+        return sb.toString();
     }
 
     ActionScheduler financialTransactionsScheduler = new ActionScheduler(this::refreshFinancialTransactions);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 - The MegaMek Team. All rights reserved.
+ * Copyright (c) 2019 - The MegaMek Team. All Rights Reserved.
  *
  * This file is part of MekHQ.
  *
@@ -47,13 +47,13 @@ public class EditPersonnelLogControl extends JPanel {
         this.campaign = campaign;
         this.person = person;
 
-        this.logModel = new LogTableModel(this.person.getPersonnelLog());
+        this.logModel = new LogTableModel(person.getPersonnelLog());
 
         initComponents();
     }
 
     private void initComponents() {
-        ResourceBundle resourceMap = ResourceBundle.getBundle("mekhq.resources.EditPersonnelLogControl", new EncodeControl()); //$NON-NLS-1$
+        ResourceBundle resourceMap = ResourceBundle.getBundle("mekhq.resources.EditPersonnelLogControl", new EncodeControl());
 
         setName(resourceMap.getString("control.name")); // NOI18N
         this.setLayout(new java.awt.BorderLayout());
@@ -107,7 +107,7 @@ public class EditPersonnelLogControl extends JPanel {
     }
 
     private void addEntry() {
-        AddOrEditPersonnelEntryDialog dialog = new AddOrEditPersonnelEntryDialog(parent, true, campaign.getDate());
+        AddOrEditPersonnelEntryDialog dialog = new AddOrEditPersonnelEntryDialog(parent, true, campaign.getLocalDate());
         dialog.setVisible(true);
         if (dialog.getEntry().isPresent()) {
             person.addLogEntry(dialog.getEntry().get());

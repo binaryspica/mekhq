@@ -29,11 +29,8 @@ import java.awt.event.ActionEvent;
 import java.io.File;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.GregorianCalendar;
 import java.util.ResourceBundle;
 
 import javax.swing.BorderFactory;
@@ -114,10 +111,11 @@ public class CustomizeScenarioDialog extends javax.swing.JDialog {
             newScenario = false;
         }
         campaign = c;
-        date = scenario.getDate();
-        if (null == date) {
-            date = campaign.getLocalDate();
+        if (scenario.getDate() == null) {
+            scenario.setDate(campaign.getLocalDate());
         }
+        date = scenario.getDate();
+
         loots = new ArrayList<>();
         for (Loot loot : scenario.getLoot()) {
             loots.add((Loot)loot.clone());
@@ -191,8 +189,8 @@ public class CustomizeScenarioDialog extends javax.swing.JDialog {
             panMain.add(choiceStatus, gridBagConstraints);
         }
         if (!scenario.isCurrent() || (campaign.getCampaignOptions().getUseAtB() && (scenario instanceof AtBScenario))) {
-            btnDate = new javax.swing.JButton();
-            btnDate.setText(date.format(DateTimeFormatter.ofPattern(campaign.getCampaignOptions().getDisplayDateFormat())));
+            btnDate = new JButton();
+            btnDate.setText(MekHQ.getMekHQOptions().getDisplayFormattedDate(date));
             btnDate.addActionListener(evt -> changeDate());
             gridBagConstraints.gridx = 0;
             gridBagConstraints.gridy++;
@@ -350,6 +348,10 @@ public class CustomizeScenarioDialog extends javax.swing.JDialog {
         }
 
         AtBDynamicScenario scenario = AtBDynamicScenarioFactory.initializeScenarioFromTemplate(scenarioTemplate, (AtBContract) mission, campaign);
+        if (scenario.getDate() == null) {
+            scenario.setDate(date);
+        }
+
         if (newScenario) {
             campaign.addScenario(scenario, mission);
         }
@@ -383,7 +385,7 @@ public class CustomizeScenarioDialog extends javax.swing.JDialog {
                             JOptionPane.ERROR_MESSAGE);
                     return;
                 } else {
-                    LocalDate nextMonday = campaign.getLocalDate().with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY));
+                    LocalDate nextMonday = campaign.getLocalDate().with(TemporalAdjusters.next(DayOfWeek.MONDAY));
 
                     if (!dc.getDate().isBefore(nextMonday)) {
                         JOptionPane.showMessageDialog(frame,
@@ -401,7 +403,7 @@ public class CustomizeScenarioDialog extends javax.swing.JDialog {
                 return;
             }
             date = dc.getDate();
-            btnDate.setText(campaign.getCampaignOptions().getDisplayFormattedDate(date));
+            btnDate.setText(MekHQ.getMekHQOptions().getDisplayFormattedDate(date));
         }
     }
 

@@ -22,7 +22,6 @@ import java.util.*;
 
 import megamek.common.Compute;
 import megamek.common.enums.Gender;
-import megamek.common.logging.LogLevel;
 import mekhq.MekHQ;
 import mekhq.Utilities;
 import mekhq.campaign.*;
@@ -134,8 +133,6 @@ public final class InjuryTypes {
 
         @Override
         public List<GameEffect> genStressEffect(Campaign c, Person p, Injury i, int hits) {
-            final String METHOD_NAME = "genStressEffect(Campaign,Person,Injury,int"; //$NON-NLS-1$
-
             return Collections.singletonList(new GameEffect(
                     "20% chance of severing the spine, permanently paralyzing the character",
                     rnd -> {
@@ -143,8 +140,8 @@ public final class InjuryTypes {
                             Injury severedSpine = SEVERED_SPINE.newInjury(c, p, BodyLocation.CHEST, 1);
                             p.addInjury(severedSpine);
 
-                            MedicalLogEntry entry = MedicalLogger.severedSpine(p, c.getDate());
-                            MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                            MedicalLogEntry entry = MedicalLogger.severedSpine(p, c.getLocalDate());
+                            MekHQ.getLogger().info(this, entry.toString());
                         }
                     }));
         }
@@ -169,8 +166,6 @@ public final class InjuryTypes {
 
         @Override
         public List<GameEffect> genStressEffect(Campaign c, Person p, Injury i, int hits) {
-            final String METHOD_NAME = "genStressEffect(Campaign,Person,Injury,int)"; //$NON-NLS-1$
-
             int deathChance = Math.max((int) Math.round((1 + hits) * 100.0 / 6.0), 100);
             if (hits > 4) {
                 return Collections.singletonList(
@@ -178,8 +173,8 @@ public final class InjuryTypes {
                                 "certain death",
                                 rnd -> {
                                     p.changeStatus(c, PersonnelStatus.WOUNDS);
-                                    MedicalLogEntry entry = MedicalLogger.diedDueToBrainTrauma(p, c.getDate());
-                                    MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                                    MedicalLogEntry entry = MedicalLogger.diedDueToBrainTrauma(p, c.getLocalDate());
+                                    MekHQ.getLogger().info(this, entry.toString());
                                 }));
             } else {
                 // We have a chance!
@@ -189,8 +184,8 @@ public final class InjuryTypes {
                         rnd -> {
                             if (rnd.applyAsInt(6) + hits >= 5) {
                                 p.changeStatus(c, PersonnelStatus.WOUNDS);
-                                MedicalLogEntry entry = MedicalLogger.diedDueToBrainTrauma(p, c.getDate());
-                                MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                                MedicalLogEntry entry = MedicalLogger.diedDueToBrainTrauma(p, c.getLocalDate());
+                                MekHQ.getLogger().info(this, entry.toString());
                         }
                     }));
             }
@@ -228,8 +223,6 @@ public final class InjuryTypes {
 
         @Override
         public List<GameEffect> genStressEffect(Campaign c, Person p, Injury i, int hits) {
-            final String METHOD_NAME = "genStressEffect(Campaign,Person,Injury,int)"; //$NON-NLS-1$
-
             String secondEffectFluff = "development of a chronic traumatic encephalopathy";
             if (hits < 5) {
                 int worseningChance = Math.max((int) Math.round((1 + hits) * 100.0 / 6.0), 100);
@@ -244,8 +237,8 @@ public final class InjuryTypes {
                             Injury cte = CTE.newInjury(c, p, BodyLocation.HEAD, 1);
                             p.addInjury(cte);
                             p.removeInjury(i);
-                            MedicalLogEntry entry = MedicalLogger.developedEncephalopathy(p, c.getDate());
-                            MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                            MedicalLogEntry entry = MedicalLogger.developedEncephalopathy(p, c.getLocalDate());
+                            MekHQ.getLogger().info(this, entry.toString());
                         }
                     })
                 );
@@ -289,7 +282,7 @@ public final class InjuryTypes {
         @Override
         public Collection<Modifier> getModifiers(Injury inj) {
             BodyLocation loc = inj.getLocation();
-            switch(loc) {
+            switch (loc) {
                 case LEFT_ARM: case LEFT_HAND: case RIGHT_ARM: case RIGHT_HAND:
                     return Collections.singletonList(new Modifier(ModifierValue.GUNNERY, 3, null, InjuryType.MODTAG_INJURY));
                 case LEFT_LEG: case LEFT_FOOT: case RIGHT_LEG: case RIGHT_FOOT:
@@ -349,10 +342,7 @@ public final class InjuryTypes {
 
         @Override
         public List<GameEffect> genStressEffect(Campaign c, Person p, Injury i, int hits) {
-            final String METHOD_NAME = "genStressEffect(Campaign,Person,Injury,int)"; //$NON-NLS-1$
-
-            String secondEffectFluff = (i.getHits() < 3)
-                ? "internal bleeding worsening" : "death";
+            String secondEffectFluff = (i.getHits() < 3) ? "internal bleeding worsening" : "death";
             if (hits < 5) {
                 int worseningChance = Math.max((int) Math.round((1 + hits) * 100.0 / 6.0), 100);
                 secondEffectFluff = worseningChance + "% chance of " + secondEffectFluff;
@@ -364,8 +354,8 @@ public final class InjuryTypes {
                                 "certain death",
                                 rnd -> {
                                     p.changeStatus(c, PersonnelStatus.WOUNDS);
-                                    MedicalLogEntry entry = MedicalLogger.diedOfInternalBleeding(p, c.getDate());
-                                    MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                                    MedicalLogEntry entry = MedicalLogger.diedOfInternalBleeding(p, c.getLocalDate());
+                                    MekHQ.getLogger().info(this, entry.toString());
                                 })
                 );
             } else {
@@ -378,12 +368,12 @@ public final class InjuryTypes {
                             if (rnd.applyAsInt(6) + hits >= 5) {
                                 if (i.getHits() < 3) {
                                     i.setHits(i.getHits() + 1);
-                                    MedicalLogEntry entry = MedicalLogger.internalBleedingWorsened(p, c.getDate());
-                                    MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                                    MedicalLogEntry entry = MedicalLogger.internalBleedingWorsened(p, c.getLocalDate());
+                                    MekHQ.getLogger().info(this, entry.toString());
                                 } else {
                                     p.changeStatus(c, PersonnelStatus.WOUNDS);
-                                    MedicalLogEntry entry = MedicalLogger.diedOfInternalBleeding(p, c.getDate());
-                                    MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                                    MedicalLogEntry entry = MedicalLogger.diedOfInternalBleeding(p, c.getLocalDate());
+                                    MekHQ.getLogger().info(this, entry.toString());
                                 }
                             }
                         })
@@ -461,16 +451,14 @@ public final class InjuryTypes {
 
         @Override
         public List<GameEffect> genStressEffect(Campaign c, Person p, Injury i, int hits) {
-            final String METHOD_NAME = "genStressEffect(Campaign,Person,Injury,int)"; //$NON-NLS-1$
-
             return Collections.singletonList(new GameEffect(
                     "10% chance of internal bleeding",
                     rnd -> {
                         if (rnd.applyAsInt(100) < 10) {
                             Injury bleeding = INTERNAL_BLEEDING.newInjury(c, p, BodyLocation.ABDOMEN, 1);
                             p.addInjury(bleeding);
-                            MedicalLogEntry entry = MedicalLogger.brokenRibPuncture(p, c.getDate());
-                            MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                            MedicalLogEntry entry = MedicalLogger.brokenRibPuncture(p, c.getLocalDate());
+                            MekHQ.getLogger().info(this, entry.toString());
                         }
                     }));
         }
@@ -487,21 +475,19 @@ public final class InjuryTypes {
 
         @Override
         public List<GameEffect> genStressEffect(Campaign c, Person p, Injury i, int hits) {
-            final String METHOD_NAME = "genStressEffect(Campaign,Person,Injury,int)";
-
             return Collections.singletonList(new GameEffect(
                     "1% chance of death; 9% chance of puncturing a lung",
                     rnd -> {
                         int rib = rnd.applyAsInt(100);
                         if (rib < 1) {
                             p.changeStatus(c, PersonnelStatus.WOUNDS);
-                            MedicalLogEntry entry = MedicalLogger.brokenRibPunctureDead(p, c.getDate());
-                            MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                            MedicalLogEntry entry = MedicalLogger.brokenRibPunctureDead(p, c.getLocalDate());
+                            MekHQ.getLogger().info(this, entry.toString());
                         } else if (rib < 10) {
                             Injury puncturedLung = PUNCTURED_LUNG.newInjury(c, p, BodyLocation.CHEST, 1);
                             p.addInjury(puncturedLung);
-                            MedicalLogEntry entry = MedicalLogger.brokenRibPuncture(p, c.getDate());
-                            MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                            MedicalLogEntry entry = MedicalLogger.brokenRibPuncture(p, c.getLocalDate());
+                            MekHQ.getLogger().info(this, entry.toString());
                         }
                     }));
         }
@@ -532,8 +518,6 @@ public final class InjuryTypes {
 
         @Override
         public List<GameEffect> genStressEffect(Campaign c, Person p, Injury i, int hits) {
-            final String METHOD_NAME = "genStressEffect(Campaign,Person,Injury,int)"; //$NON-NLS-1$
-
             String secondEffectFluff = (i.getHits() == 1)
                 ? "concussion worsening" : "development of a cerebral contusion";
             if (hits < 5) {
@@ -547,14 +531,14 @@ public final class InjuryTypes {
                         if (rnd.applyAsInt(6) + hits >= 5) {
                             if (i.getHits() == 1) {
                                 i.setHits(2);
-                                MedicalLogEntry entry = MedicalLogger.concussionWorsened(p, c.getDate());
-                                MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                                MedicalLogEntry entry = MedicalLogger.concussionWorsened(p, c.getLocalDate());
+                                MekHQ.getLogger().info(this, entry.toString());
                             } else {
                                 Injury cerebralContusion = CEREBRAL_CONTUSION.newInjury(c, p, BodyLocation.HEAD, 1);
                                 p.addInjury(cerebralContusion);
                                 p.removeInjury(i);
-                                MedicalLogEntry entry = MedicalLogger.developedCerebralContusion(p, c.getDate());
-                                MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.INFO, entry.toString());
+                                MedicalLogEntry entry = MedicalLogger.developedCerebralContusion(p, c.getLocalDate());
+                                MekHQ.getLogger().info(this, entry.toString());
                             }
                         }
                     })

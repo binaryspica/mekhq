@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 - The MegaMek Team. All rights reserved.
+ * Copyright (c) 2019 - The MegaMek Team. All Rights Reserved.
  *
  * This file is part of MekHQ.
  *
@@ -47,7 +47,7 @@ public class EditMissionLogControl extends JPanel {
         this.campaign = campaign;
         this.person = person;
 
-        this.logModel = new LogTableModel(this.person.getMissionLog());
+        this.logModel = new LogTableModel(person.getMissionLog());
 
         initComponents();
     }
@@ -107,7 +107,7 @@ public class EditMissionLogControl extends JPanel {
     }
 
     private void addEntry() {
-        AddOrEditMissionEntryDialog dialog = new AddOrEditMissionEntryDialog(parent, true, campaign.getDate());
+        AddOrEditMissionEntryDialog dialog = new AddOrEditMissionEntryDialog(parent, true, campaign.getLocalDate());
         dialog.setVisible(true);
         if (dialog.getEntry().isPresent()) {
             person.addMissionLogEntry(dialog.getEntry().get());

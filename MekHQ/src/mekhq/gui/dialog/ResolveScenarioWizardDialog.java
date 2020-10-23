@@ -314,8 +314,7 @@ public class ResolveScenarioWizardDialog extends JDialog {
             gridBagConstraints.anchor = GridBagConstraints.NORTHWEST;
             gridBagConstraints.insets = new Insets(5, 5, 0, 0);
             gridBagConstraints.weightx = 0.0;
-            j++;
-            if (j == tracker.getUnits().size()) {
+            if (++j == tracker.getUnits().size()) {
                 gridBagConstraints.weighty = 1.0;
             }
             pnlUnitStatus.add(nameLbl, gridBagConstraints);
@@ -475,7 +474,7 @@ public class ResolveScenarioWizardDialog extends JDialog {
             hitSlider.setPaintLabels(true);
             hitSlider.setSnapToTicks(true);
             pr_hitSliders.add(hitSlider);
-            gridBagConstraints.anchor = GridBagConstraints.CENTER;
+            gridBagConstraints.anchor = GridBagConstraints.NORTH;
             gridBagConstraints.gridx = gridx++;
             pnlPrisonerStatus.add(hitSlider, gridBagConstraints);
 
@@ -514,9 +513,8 @@ public class ResolveScenarioWizardDialog extends JDialog {
             // if the person is dead, set the checkbox and skip all this captured stuff
             if ((status.getHits() > 5) || status.isDead()) {
                 kiaCheck.setSelected(true);
-            } else if (status.isCaptured() &&
-                    tracker.getCampaign().getCampaignOptions().getUseAtB() &&
-                    tracker.getCampaign().getCampaignOptions().getUseAtBCapture()) {
+            } else if (status.isCaptured()
+                    && tracker.getCampaign().getCampaignOptions().getPrisonerCaptureStyle().isAtB()) {
                 boolean wasCaptured = false;
                 if (status.wasPickedUp()) {
                     wasCaptured = true;
@@ -651,7 +649,7 @@ public class ResolveScenarioWizardDialog extends JDialog {
             salvaged.setSelected(!tracker.usesSalvageExchange() && (maxSalvagePct >= 100));
             salvaged.addItemListener(evt -> checkSalvageRights());
             salvageBoxes.add(salvaged);
-            gridBagConstraints.anchor = GridBagConstraints.CENTER;
+            gridBagConstraints.anchor = GridBagConstraints.NORTH;
             gridBagConstraints.gridx = gridx++;
             pnlSalvage.add(salvaged, gridBagConstraints);
 

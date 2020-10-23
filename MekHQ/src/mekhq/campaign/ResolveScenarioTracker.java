@@ -31,7 +31,6 @@ import megamek.client.Client;
 import megamek.common.*;
 import megamek.common.event.GameVictoryEvent;
 import megamek.common.loaders.EntityLoadingException;
-import megamek.common.logging.LogLevel;
 import megamek.common.options.OptionsConstants;
 import mekhq.MekHQ;
 import mekhq.Utilities;
@@ -120,7 +119,7 @@ public class ResolveScenarioTracker {
         entities = new HashMap<>();
         bayLoadedEntities = new HashMap<>();
         idMap = new HashMap<>();
-        for (UUID uid : scenario.getForces(campaign).getAllUnits()) {
+        for (UUID uid : scenario.getForces(campaign).getAllUnits(true)) {
             Unit u = campaign.getUnit(uid);
             if (null != u && null == u.checkDeployment()) {
                 units.add(u);
@@ -148,7 +147,7 @@ public class ResolveScenarioTracker {
             try {
                 loadUnitsAndPilots(unitList.get());
             } catch (IOException e) {
-                MekHQ.getLogger().error(getClass(), "processMulFiles", e);
+                MekHQ.getLogger().error(this, e);
             }
         } else {
             initUnitsAndPilotsWithoutBattle();
@@ -221,7 +220,7 @@ public class ResolveScenarioTracker {
                     // Kill credit automatically assigned only if they can't escape
                     if (!e.canEscape()) {
                         Entity killer = victoryEvent.getEntity(e.getKillerId());
-                        if (null != killer && killer.getOwnerId() == pid) {
+                        if (null != killer) {
                             //the killer is one of your units, congrats!
                             killCredits.put(e.getDisplayName(), killer.getExternalIdAsString());
                         } else {
@@ -288,7 +287,7 @@ public class ResolveScenarioTracker {
                 }
             } else {
                 Entity killer = victoryEvent.getEntity(e.getKillerId());
-                if (null != killer && killer.getOwnerId() == pid) {
+                if (null != killer) {
                     //the killer is one of your units, congrats!
                     killCredits.put(e.getDisplayName(), killer.getExternalIdAsString());
                 } else {
@@ -373,7 +372,7 @@ public class ResolveScenarioTracker {
                 }
             } else if (e.getOwner().isEnemyOf(client.getLocalPlayer())) {
                 Entity killer = victoryEvent.getEntity(e.getKillerId());
-                if (null != killer && killer.getOwnerId() == pid) {
+                if (null != killer) {
                     //the killer is one of your units, congrats!
                     killCredits.put(e.getDisplayName(), killer.getExternalIdAsString());
                 } else {
@@ -474,8 +473,6 @@ public class ResolveScenarioTracker {
     }
 
     public void assignKills() {
-        final String METHOD_NAME = "assignKills()"; //$NON-NLS-1$
-
         for (Unit u : units) {
             for (String killed : killCredits.keySet()) {
                 if (killCredits.get(killed).equalsIgnoreCase("None")) {
@@ -486,12 +483,12 @@ public class ResolveScenarioTracker {
                         PersonStatus status = peopleStatus.get(p.getId());
                         if (null == status) {
                             //this shouldn't happen so report
-                            MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.ERROR,
-                                    "A null person status was found for person id " + p.getId().toString() //$NON-NLS-1$
-                                    + " when trying to assign kills"); //$NON-NLS-1$
+                            MekHQ.getLogger().error(this,
+                                    "A null person status was found for person id " + p.getId().toString()
+                                    + " when trying to assign kills");
                             continue;
                         }
-                        status.addKill(new Kill(p.getId(), killed, u.getEntity().getShortNameRaw(), campaign.getCalendar().getTime()));
+                        status.addKill(new Kill(p.getId(), killed, u.getEntity().getShortNameRaw(), campaign.getLocalDate()));
                     }
                 }
             }
@@ -670,7 +667,7 @@ public class ResolveScenarioTracker {
         }
 
         // And now we have potential prisoners that are crewing a unit...
-        if (campaign.getCampaignOptions().capturePrisoners()) {
+        if (campaign.getCampaignOptions().getPrisonerCaptureStyle().isEnabled()) {
             processPrisonerCapture(potentialSalvage);
             processPrisonerCapture(devastatedEnemyUnits);
         }
@@ -685,7 +682,6 @@ public class ResolveScenarioTracker {
      * @param unitStatus The post-battle status of en
      */
     private void processLargeCraft(Unit ship, Entity en, List<Person> personnel, UnitStatus unitStatus) {
-        final String METHOD_NAME = "processLargeCraft(Unit,Entity,List<Person>,UnitStatus)"; //$NON-NLS-1$
         //The entity must be an Aero for us to get here
         Aero aero = (Aero) en;
         //Find out if this large craft ejected or was in the process of ejecting,
@@ -697,8 +693,7 @@ public class ResolveScenarioTracker {
                 Entity e = entities.get(UUID.fromString(id));
                 // Invalid entity?
                 if (e == null) {
-                    MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.ERROR,
-                            "Null entity reference in:" + aero.getDisplayName() + "getEscapeCraft()");
+                    MekHQ.getLogger().error(this, "Null entity reference in:" + aero.getDisplayName() + "getEscapeCraft()");
                     continue;
                 }
                 //If the escape craft was destroyed in combat, skip it
@@ -1052,8 +1047,6 @@ public class ResolveScenarioTracker {
     }
 
     private void loadUnitsAndPilots(File unitFile) throws IOException {
-        final String METHOD_NAME = "loadUnitsAndPilots(File)"; //$NON-NLS-1$
-
         if (unitFile != null) {
             // I need to get the parser myself, because I want to pull both
             // entities and pilots from it
@@ -1065,13 +1058,12 @@ public class ResolveScenarioTracker {
                 // Read a Vector from the file.
                 parser.parse(listStream);
             } catch (Exception e) {
-                MekHQ.getLogger().error(getClass(), "loadUnitsAndPilots", e);
+                MekHQ.getLogger().error(this, e);
             }
 
             // Was there any error in parsing?
             if (parser.hasWarningMessage()) {
-                MekHQ.getLogger().log(getClass(), METHOD_NAME, LogLevel.WARNING,
-                        parser.getWarningMessage());
+                MekHQ.getLogger().warning(this, parser.getWarningMessage());
             }
 
             killCredits = parser.getKills();
@@ -1395,7 +1387,7 @@ public class ResolveScenarioTracker {
             }
             if (status.wasDeployed()) {
                 person.awardXP(status.getXP());
-                ServiceLogger.participatedInMission(person, campaign.getDate(), scenario.getName(), m.getName());
+                ServiceLogger.participatedInMission(person, campaign.getLocalDate(), scenario.getName(), m.getName());
             }
             for (Kill k : status.getKills()) {
                 campaign.addKill(k);
@@ -1424,7 +1416,7 @@ public class ResolveScenarioTracker {
         for (UUID pid : oppositionPersonnel.keySet()) {
             OppositionPersonnelStatus status = oppositionPersonnel.get(pid);
             Person person = status.getPerson();
-            if (null == person) {
+            if (person == null) {
                 continue;
             }
             MekHQ.triggerEvent(new PersonBattleFinishedEvent(person, status));
@@ -1437,10 +1429,10 @@ public class ResolveScenarioTracker {
                 PrisonerStatus prisonerStatus = getCampaign().getCampaignOptions().getDefaultPrisonerStatus();
 
                 // Then, we need to determine if they are a defector
-                if (prisonerStatus.isPrisoner() && getCampaign().getCampaignOptions().getUseAtB()
-                        && getCampaign().getCampaignOptions().getUseAtBCapture() && (m instanceof AtBContract)) {
+                if (prisonerStatus.isPrisoner() && getCampaign().getCampaignOptions().useAtBPrisonerDefection()
+                        && (m instanceof AtBContract)) {
                     // Are they actually a defector?
-                    if (Compute.d6(2) >= (10 + ((AtBContract) m).getEnemySkill() - getCampaign().getUnitRatingMod())) {
+                    if (Compute.d6(2) >= (10 + ((AtBContract) m).getEnemySkill() - getCampaign().getUnitRatingAsInteger())) {
                         prisonerStatus = PrisonerStatus.PRISONER_DEFECTOR;
                     }
                 }
@@ -1458,7 +1450,7 @@ public class ResolveScenarioTracker {
                 person.setHits(status.getHits());
             }
 
-            ServiceLogger.participatedInMission(person, campaign.getDate(), scenario.getName(), m.getName());
+            ServiceLogger.participatedInMission(person, campaign.getLocalDate(), scenario.getName(), m.getName());
 
             for (Kill k : status.getKills()) {
                 campaign.addKill(k);
@@ -1584,7 +1576,7 @@ public class ResolveScenarioTracker {
             }
             if (((Contract) getMission()).isSalvageExchange()) {
                 value = value.multipliedBy(((Contract) getMission()).getSalvagePct()).dividedBy(100);
-                campaign.getFinances().credit(value, Transaction.C_SALVAGE, "salvage exchange for "
+                campaign.getFinances().credit(value, Transaction.C_SALVAGE, "Salvage exchange for "
                         + scenario.getName(),  campaign.getLocalDate());
                 campaign.addReport(value.toAmountAndSymbolString() + " have been credited to your account for salvage exchange.");
             } else {
@@ -1919,7 +1911,7 @@ public class ResolveScenarioTracker {
                             : unit.getEntity();
                     baseEntity = new MechFileParser(summary.getSourceFile(), summary.getEntryName()).getEntity();
                 } catch (EntityLoadingException e) {
-                    MekHQ.getLogger().error(getClass(), "Unit Status", e);
+                    MekHQ.getLogger().error(this, e);
                 }
             }
         }

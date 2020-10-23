@@ -528,7 +528,7 @@ public class MercRosterAccess extends SwingWorker<Void, Void> {
                     preparedStatement = connect.prepareStatement("INSERT INTO " + table + ".kills (parent, type, killdate, equipment) VALUES (?, ?, ?, ?)");
                     preparedStatement.setInt(1, id);
                     preparedStatement.setString(2, truncateString(k.getWhatKilled(), 45));
-                    preparedStatement.setDate(3, new Date(k.getDate().getTime()));
+                    preparedStatement.setDate(3, Date.valueOf(k.getDate().toString()));
                     preparedStatement.setString(4, truncateString(k.getKilledByWhat(), 45));
                     preparedStatement.executeUpdate();
                 }
@@ -557,7 +557,7 @@ public class MercRosterAccess extends SwingWorker<Void, Void> {
 
         progressNote = "Uploading equipment data";
         determineProgress();
-        for (Unit u : campaign.getUnits()) {
+        for (Unit u : campaign.getHangar().getUnits()) {
             try {
                 preparedStatement = connect.prepareStatement("UPDATE " + table + ".equipment SET type=?, name=?, subtype=?, crew=?, weight=?, regnumber=?, notes=? WHERE uuid=?");
                 preparedStatement.setInt(1, u.getEntity().getUnitType() + 1);
@@ -654,7 +654,7 @@ public class MercRosterAccess extends SwingWorker<Void, Void> {
     }
 
     private int getLengthOfTask() {
-        return 2 + campaign.getRanks().getAllRanks().size() + SkillType.skillList.length + Person.T_NUM * 2 + UnitType.SIZE + campaign.getPersonnel().size() * 4 + campaign.getUnits().size() + campaign.getAllForces().size() * 2;
+        return 2 + campaign.getRanks().getAllRanks().size() + SkillType.skillList.length + Person.T_NUM * 2 + UnitType.SIZE + campaign.getPersonnel().size() * 4 + campaign.getHangar().getUnits().size() + campaign.getAllForces().size() * 2;
     }
 
     public void determineProgress() {
