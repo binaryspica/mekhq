@@ -18,6 +18,8 @@
  */
 package mekhq;
 
+import mekhq.gui.enums.PersonnelFilterStyle;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.prefs.Preferences;
@@ -81,12 +83,13 @@ public final class MekHQOptions {
     //endregion Command Center Display
 
     //region Personnel Tab Display Options
-    public boolean getPersonnelIndividualRoleFilters() {
-        return userPreferences.node(MekHqConstants.DISPLAY_NODE).getBoolean(MekHqConstants.PERSONNEL_INDIVIDUAL_ROLE_FILTERS, false);
+    public PersonnelFilterStyle getPersonnelFilterStyle() {
+        return PersonnelFilterStyle.valueOf(userPreferences.node(MekHqConstants.DISPLAY_NODE)
+                .get(MekHqConstants.PERSONNEL_FILTER_STYLE, "STANDARD"));
     }
 
-    public void setPersonnelIndividualRoleFilters(boolean value) {
-        userPreferences.node(MekHqConstants.DISPLAY_NODE).putBoolean(MekHqConstants.PERSONNEL_INDIVIDUAL_ROLE_FILTERS, value);
+    public void setPersonnelFilterStyle(PersonnelFilterStyle value) {
+        userPreferences.node(MekHqConstants.DISPLAY_NODE).put(MekHqConstants.PERSONNEL_FILTER_STYLE, value.name());
     }
 
     public boolean getPersonnelFilterOnPrimaryRole() {
@@ -203,6 +206,16 @@ public final class MekHQOptions {
         userPreferences.node(MekHqConstants.XML_SAVES_NODE).putBoolean(MekHqConstants.SAVE_MOTHBALL_STATE, value);
     }
     //endregion Campaign XML Save Options
+
+    //region File Paths
+    public String getAwardsDirectoryPath() {
+        return userPreferences.node(MekHqConstants.FILE_PATH_NODE).get(MekHqConstants.AWARDS_DIRECTORY_PATH, "data/universe/awards/");
+    }
+
+    public void setAwardsDirectoryPath(String value) {
+        userPreferences.node(MekHqConstants.FILE_PATH_NODE).put(MekHqConstants.AWARDS_DIRECTORY_PATH, value);
+    }
+    //endregion File Paths
 
     //region Miscellaneous Options
     public int getStartGameDelay() {

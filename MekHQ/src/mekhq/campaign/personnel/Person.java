@@ -34,6 +34,7 @@ import megamek.client.generator.RandomNameGenerator;
 import megamek.common.*;
 import megamek.common.enums.Gender;
 import megamek.common.icons.AbstractIcon;
+import megamek.common.icons.Portrait;
 import megamek.common.util.EncodeControl;
 import megamek.common.util.StringUtil;
 import mekhq.campaign.*;
@@ -43,6 +44,8 @@ import mekhq.campaign.log.*;
 import mekhq.campaign.parts.Part;
 import mekhq.campaign.personnel.enums.*;
 import mekhq.campaign.personnel.familyTree.Genealogy;
+import mekhq.campaign.personnel.ranks.Rank;
+import mekhq.campaign.personnel.ranks.Ranks;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
@@ -166,6 +169,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
     private String maidenName;
     private String callsign;
     private Gender gender;
+    private AbstractIcon portrait;
 
     private int primaryRole;
     private int secondaryRole;
@@ -210,18 +214,13 @@ public class Person implements Serializable, MekHqXmlSerializable {
     private Planet originPlanet;
 
     //assignments
-    private UUID unitId;
+    private Unit unit;
     private UUID doctorId;
-    private List<UUID> techUnitIds;
+    private List<Unit> techUnits;
 
     //days of rest
     private int idleMonths;
     private int daysToWaitForHealing;
-
-    //region portrait
-    private String portraitCategory;
-    private String portraitFile;
-    //endregion portrait
 
     // Our rank
     private int rank;
@@ -293,13 +292,6 @@ public class Person implements Serializable, MekHqXmlSerializable {
         OTHER_RANSOM_VALUES.put(SkillType.EXP_ELITE, Money.of(50000));
     }
 
-    private static final ResourceBundle resources = ResourceBundle.getBundle("mekhq.resources.Personnel",
-            new EncodeControl());
-
-    //region Reverse Compatibility
-    // Unknown version
-    private int oldId;
-    //endregion Reverse Compatibility
     //endregion Variable Declarations
 
     //region Constructors
@@ -363,8 +355,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
         tryingToConceive = true;
         dueDate = null;
         expectedDueDate = null;
-        portraitCategory = AbstractIcon.ROOT_CATEGORY;
-        portraitFile = AbstractIcon.DEFAULT_ICON_FILENAME;
+        setPortrait(new Portrait());
         xp = 0;
         daysToWaitForHealing = 0;
         gender = Gender.MALE;
@@ -375,7 +366,6 @@ public class Person implements Serializable, MekHqXmlSerializable {
         maneiDominiClass = ManeiDominiClass.NONE;
         nTasks = 0;
         doctorId = null;
-        unitId = null;
         salary = Money.of(-1);
         totalEarnings = Money.of(0);
         status = PersonnelStatus.ACTIVE;
@@ -391,7 +381,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
         skills = new Skills();
         options = new PersonnelOptions();
         currentEdge = 0;
-        techUnitIds = new ArrayList<>();
+        techUnits = new ArrayList<>();
         personnelLog = new ArrayList<>();
         missionLog = new ArrayList<>();
         awardController = new PersonAwardController(this);
@@ -538,11 +528,8 @@ public class Person implements Serializable, MekHqXmlSerializable {
         }
 
         if (!prisonerStatus.isFree()) {
-            Unit u = getCampaign().getUnit(getUnitId());
-            if (u != null) {
-                u.remove(this, true);
-            } else {
-                setUnitId(null);
+            if (getUnit() != null) {
+                getUnit().remove(this, true);
             }
         }
 
@@ -694,20 +681,22 @@ public class Person implements Serializable, MekHqXmlSerializable {
     }
     //endregion Names
 
+    //region Portrait
+    public AbstractIcon getPortrait() {
+        return portrait;
+    }
+
+    public void setPortrait(AbstractIcon portrait) {
+        assert (portrait != null) : "Illegal assignment: cannot have a null AbstractIcon for a Portrait";
+        this.portrait = Objects.requireNonNull(portrait);
+    }
+
     public String getPortraitCategory() {
-        return portraitCategory;
+        return getPortrait().getCategory();
     }
 
     public String getPortraitFileName() {
-        return portraitFile;
-    }
-
-    public void setPortraitCategory(String s) {
-        this.portraitCategory = s;
-    }
-
-    public void setPortraitFileName(String s) {
-        this.portraitFile = s;
+        return getPortrait().getFilename();
     }
 
     //region Personnel Roles
@@ -920,6 +909,37 @@ public class Person implements Serializable, MekHqXmlSerializable {
                 MedicalLogger.diedOfOldAge(this, campaign.getLocalDate());
                 ServiceLogger.passedAway(this, campaign.getLocalDate(), status.toString());
                 break;
+            case PREGNANCY_COMPLICATIONS:
+                // The child might be able to be born, albeit into a world without their mother.
+                // This can be manually set by males and for those who are not pregnant. This is
+                // purposeful, to allow for player customization, and thus we first check if someone
+                // is pregnant before having the birth
+                if (isPregnant()) {
+                    int pregnancyWeek = getPregnancyWeek(campaign.getLocalDate());
+                    double babyBornChance;
+                    if (pregnancyWeek > 35) {
+                        babyBornChance = 0.99;
+                    } else if (pregnancyWeek > 29) {
+                        babyBornChance = 0.95;
+                    } else if (pregnancyWeek > 25) {
+                        babyBornChance = 0.9;
+                    } else if (pregnancyWeek == 25) {
+                        babyBornChance = 0.8;
+                    } else if (pregnancyWeek == 24) {
+                        babyBornChance = 0.5;
+                    } else if (pregnancyWeek == 23) {
+                        babyBornChance = 0.25;
+                    } else {
+                        babyBornChance = 0;
+                    }
+
+                    if (Compute.randomFloat() < babyBornChance) {
+                        birth(campaign);
+                    }
+                }
+                MedicalLogger.diedFromPregnancyComplications(this, campaign.getLocalDate());
+                ServiceLogger.passedAway(this, campaign.getLocalDate(), status.toString());
+                break;
         }
 
         setStatus(status);
@@ -937,15 +957,13 @@ public class Person implements Serializable, MekHqXmlSerializable {
         if (!status.isActive()) {
             setDoctorId(null, campaign.getCampaignOptions().getNaturalHealingWaitingPeriod());
             // If we're assigned to a unit, remove us from it
-            Unit unit = campaign.getUnit(getUnitId());
-            if (unit != null) {
-                unit.remove(this, true);
+            if (getUnit() != null) {
+                getUnit().remove(this, true);
             }
 
             // If we're assigned as a tech for any unit, remove us from it/them
-            for (UUID techUnitId : new ArrayList<>(getTechUnitIDs())) {
-                unit = campaign.getUnit(techUnitId);
-                unit.remove(this, true);
+            for (Unit unitWeTech : new ArrayList<>(getTechUnits())) {
+                unitWeTech.remove(this, true);
             }
             // If we're assigned to any repairs or refits, remove that assignment
             for (Part part : campaign.getParts()) {
@@ -1351,6 +1369,12 @@ public class Person implements Serializable, MekHqXmlSerializable {
         this.expectedDueDate = expectedDueDate;
     }
 
+    public int getPregnancyWeek(LocalDate today) {
+        return Math.toIntExact(ChronoUnit.WEEKS.between(getExpectedDueDate()
+                .minus(PREGNANCY_STANDARD_DURATION, ChronoUnit.DAYS)
+                .plus(1, ChronoUnit.DAYS), today));
+    }
+
     public boolean isPregnant() {
         return dueDate != null;
     }
@@ -1614,9 +1638,8 @@ public class Person implements Serializable, MekHqXmlSerializable {
     }
 
     public boolean isDeployed() {
-        Unit u = campaign.getUnit(unitId);
-        if (null != u) {
-            return (u.getScenarioId() != -1);
+        if (null != getUnit()) {
+            return (getUnit().getScenarioId() != -1);
         }
         return false;
     }
@@ -1708,11 +1731,11 @@ public class Person implements Serializable, MekHqXmlSerializable {
                 MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "expectedDueDate",
                         MekHqXmlUtil.saveFormattedDate(expectedDueDate));
             }
-            if (!AbstractIcon.ROOT_CATEGORY.equals(portraitCategory)) {
-                MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "portraitCategory", portraitCategory);
+            if (!getPortrait().hasDefaultCategory()) {
+                MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "portraitCategory", getPortrait().getCategory());
             }
-            if (!AbstractIcon.DEFAULT_ICON_FILENAME.equals(portraitFile)) {
-                MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "portraitFile", portraitFile);
+            if (!getPortrait().hasDefaultFilename()) {
+                MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "portraitFile", getPortrait().getFilename());
             }
             // Always save the current XP
             MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "xp", xp);
@@ -1741,8 +1764,8 @@ public class Person implements Serializable, MekHqXmlSerializable {
             if (doctorId != null) {
                 MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "doctorId", doctorId.toString());
             }
-            if (unitId != null) {
-                MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "unitId", unitId.toString());
+            if (getUnit() != null) {
+                MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "unitId", getUnit().getId());
             }
             if (!salary.equals(Money.of(-1))) {
                 MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "salary", salary.toXmlString());
@@ -1806,10 +1829,10 @@ public class Person implements Serializable, MekHqXmlSerializable {
                 MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "implants",
                         getOptionList("::", PilotOptions.MD_ADVANTAGES));
             }
-            if (!techUnitIds.isEmpty()) {
+            if (!techUnits.isEmpty()) {
                 MekHqXmlUtil.writeSimpleXMLOpenIndentedLine(pw1, indent + 1, "techUnitIds");
-                for (UUID id : techUnitIds) {
-                    MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 2, "id", id.toString());
+                for (Unit unit : techUnits) {
+                    MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 2, "id", unit.getId());
                 }
                 MekHqXmlUtil.writeSimpleXMLCloseIndentedLine(pw1, indent + 1, "techUnitIds");
             }
@@ -1933,11 +1956,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
                 } else if (wn2.getNodeName().equalsIgnoreCase("idleMonths")) {
                     retVal.idleMonths = Integer.parseInt(wn2.getTextContent());
                 } else if (wn2.getNodeName().equalsIgnoreCase("id")) {
-                    if (version.getMajorVersion() == 0 && version.getMinorVersion() < 2 && version.getSnapshot() < 14) {
-                        retVal.oldId = Integer.parseInt(wn2.getTextContent());
-                    } else {
-                        retVal.id = UUID.fromString(wn2.getTextContent());
-                    }
+                    retVal.id = UUID.fromString(wn2.getTextContent());
                 } else if (wn2.getNodeName().equalsIgnoreCase("ancestors")) { // legacy - 0.47.6 removal
                     CampaignXmlParser.addToAncestryMigrationMap(UUID.fromString(wn2.getTextContent().trim()), retVal);
                 } else if (wn2.getNodeName().equalsIgnoreCase("spouse")) { // legacy - 0.47.6 removal
@@ -1955,9 +1974,9 @@ public class Person implements Serializable, MekHqXmlSerializable {
                 } else if (wn2.getNodeName().equalsIgnoreCase("expectedDueDate")) {
                     retVal.expectedDueDate = MekHqXmlUtil.parseDate(wn2.getTextContent().trim());
                 } else if (wn2.getNodeName().equalsIgnoreCase("portraitCategory")) {
-                    retVal.setPortraitCategory(wn2.getTextContent());
+                    retVal.getPortrait().setCategory(wn2.getTextContent());
                 } else if (wn2.getNodeName().equalsIgnoreCase("portraitFile")) {
-                    retVal.setPortraitFileName(wn2.getTextContent());
+                    retVal.getPortrait().setFilename(wn2.getTextContent());
                 } else if (wn2.getNodeName().equalsIgnoreCase("xp")) {
                     retVal.xp = Integer.parseInt(wn2.getTextContent());
                 } else if (wn2.getNodeName().equalsIgnoreCase("nTasks")) {
@@ -1967,19 +1986,9 @@ public class Person implements Serializable, MekHqXmlSerializable {
                 } else if (wn2.getNodeName().equalsIgnoreCase("gender")) {
                     retVal.gender = Gender.parseFromString(wn2.getTextContent().trim());
                 } else if (wn2.getNodeName().equalsIgnoreCase("rank")) {
-                    if (version.isLowerThan("0.3.4-r1782")) {
-                        RankTranslator rt = new RankTranslator(c);
-                        try {
-                            retVal.rank = rt.getNewRank(c.getRanks().getOldRankSystem(),
-                                    Integer.parseInt(wn2.getTextContent()));
-                        } catch (ArrayIndexOutOfBoundsException e) {
-                            // Do nothing
-                        }
-                    } else {
-                        retVal.rank = Integer.parseInt(wn2.getTextContent());
-                    }
+                    retVal.rank = Integer.parseInt(wn2.getTextContent().trim());
                 } else if (wn2.getNodeName().equalsIgnoreCase("rankLevel")) {
-                    retVal.rankLevel = Integer.parseInt(wn2.getTextContent());
+                    retVal.rankLevel = Integer.parseInt(wn2.getTextContent().trim());
                 } else if (wn2.getNodeName().equalsIgnoreCase("rankSystem")) {
                     retVal.setRankSystem(Integer.parseInt(wn2.getTextContent()));
                 } else if (wn2.getNodeName().equalsIgnoreCase("maneiDominiRank")) {
@@ -1992,7 +2001,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
                     }
                 } else if (wn2.getNodeName().equalsIgnoreCase("unitId")) {
                     if (!wn2.getTextContent().equals("null")) {
-                        retVal.unitId = UUID.fromString(wn2.getTextContent());
+                        retVal.unit = new PersonUnitRef(UUID.fromString(wn2.getTextContent()));
                     }
                 } else if (wn2.getNodeName().equalsIgnoreCase("status")) {
                     retVal.setStatus(PersonnelStatus.parseFromString(wn2.getTextContent().trim()));
@@ -2059,10 +2068,10 @@ public class Person implements Serializable, MekHqXmlSerializable {
                         }
 
                         if (!wn3.getNodeName().equalsIgnoreCase("id")) {
-                            MekHQ.getLogger().error(Person.class, "Unknown node type not loaded in techUnitIds nodes: " + wn3.getNodeName());
+                            MekHQ.getLogger().error("Unknown node type not loaded in techUnitIds nodes: " + wn3.getNodeName());
                             continue;
                         }
-                        retVal.addTechUnitID(UUID.fromString(wn3.getTextContent()));
+                        retVal.addTechUnit(new PersonUnitRef(UUID.fromString(wn3.getTextContent())));
                     }
                 } else if (wn2.getNodeName().equalsIgnoreCase("personnelLog")) {
                     NodeList nl2 = wn2.getChildNodes();
@@ -2074,7 +2083,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
                         }
 
                         if (!wn3.getNodeName().equalsIgnoreCase("logEntry")) {
-                            MekHQ.getLogger().error(Person.class, "Unknown node type not loaded in personnel log nodes: " + wn3.getNodeName());
+                            MekHQ.getLogger().error("Unknown node type not loaded in personnel log nodes: " + wn3.getNodeName());
                             continue;
                         }
 
@@ -2103,12 +2112,13 @@ public class Person implements Serializable, MekHqXmlSerializable {
                         }
 
                         if (!wn3.getNodeName().equalsIgnoreCase("logEntry")) {
-                            MekHQ.getLogger().error(Person.class, "Unknown node type not loaded in mission log nodes: " + wn3.getNodeName());
+                            MekHQ.getLogger().error("Unknown node type not loaded in mission log nodes: " + wn3.getNodeName());
                             continue;
                         }
                         retVal.addMissionLogEntry(LogEntryFactory.getInstance().generateInstanceFromXML(wn3));
                     }
                 } else if (wn2.getNodeName().equalsIgnoreCase("awards")) {
+                    final boolean defaultSetMigrationRequired = version.isLowerThan("0.47.15");
                     NodeList nl2 = wn2.getChildNodes();
                     for (int y = 0; y < nl2.getLength(); y++) {
 
@@ -2119,11 +2129,12 @@ public class Person implements Serializable, MekHqXmlSerializable {
                         }
 
                         if (!wn3.getNodeName().equalsIgnoreCase("award")) {
-                            MekHQ.getLogger().error(Person.class, "Unknown node type not loaded in personnel log nodes: " + wn3.getNodeName());
+                            MekHQ.getLogger().error("Unknown node type not loaded in personnel log nodes: " + wn3.getNodeName());
                             continue;
                         }
 
-                        retVal.awardController.addAwardFromXml(AwardsFactory.getInstance().generateNewFromXML(wn3));
+                        retVal.getAwardController().addAwardFromXml(AwardsFactory.getInstance()
+                                .generateNewFromXML(wn3, defaultSetMigrationRequired));
                     }
 
                 } else if (wn2.getNodeName().equalsIgnoreCase("injuries")) {
@@ -2136,7 +2147,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
                         }
 
                         if (!wn3.getNodeName().equalsIgnoreCase("injury")) {
-                            MekHQ.getLogger().error(Person.class, "Unknown node type not loaded in injury nodes: " + wn3.getNodeName());
+                            MekHQ.getLogger().error("Unknown node type not loaded in injury nodes: " + wn3.getNodeName());
                             continue;
                         }
                         retVal.injuries.add(Injury.generateInstanceFromXML(wn3));
@@ -2162,72 +2173,6 @@ public class Person implements Serializable, MekHqXmlSerializable {
             if (version.isLowerThan("0.47.5") && (retVal.getExpectedDueDate() == null)
                     && (retVal.getDueDate() != null)) {
                 retVal.setExpectedDueDate(retVal.getDueDate());
-            }
-
-            //versions before 0.3.4 did not have proper clan phenotypes
-            if (version.isLowerThan("0.3.4") && c.getFaction().isClan()) {
-                //assume personnel are clan and trueborn if the right role
-                retVal.setClanner(true);
-                switch (retVal.getPrimaryRole()) {
-                    case Person.T_MECHWARRIOR:
-                        retVal.setPhenotype(Phenotype.MECHWARRIOR);
-                        break;
-                    case Person.T_AERO_PILOT:
-                    case Person.T_CONV_PILOT:
-                        retVal.setPhenotype(Phenotype.AEROSPACE);
-                        break;
-                    case Person.T_BA:
-                        retVal.setPhenotype(Phenotype.ELEMENTAL);
-                        break;
-                    case Person.T_VEE_GUNNER:
-                    case Person.T_GVEE_DRIVER:
-                    case Person.T_NVEE_DRIVER:
-                    case Person.T_VTOL_PILOT:
-                        retVal.setPhenotype(Phenotype.VEHICLE);
-                        break;
-                    case Person.T_PROTO_PILOT:
-                        retVal.setPhenotype(Phenotype.PROTOMECH);
-                        break;
-                    default:
-                        retVal.setPhenotype(Phenotype.NONE);
-                        break;
-                }
-            }
-
-            if (version.getMajorVersion() == 0 && version.getMinorVersion() < 2 && version.getSnapshot() < 13) {
-                if (retVal.primaryRole > T_INFANTRY) {
-                    retVal.primaryRole += 4;
-
-                }
-                if (retVal.secondaryRole > T_INFANTRY) {
-                    retVal.secondaryRole += 4;
-                }
-            }
-
-            if (version.getMajorVersion() == 0 && version.getMinorVersion() == 2) {
-                //adjust for conventional fighter pilots
-                if (retVal.primaryRole >= T_CONV_PILOT) {
-                    retVal.primaryRole += 1;
-                }
-                if (retVal.secondaryRole >= T_CONV_PILOT) {
-                    retVal.secondaryRole += 1;
-                }
-            }
-
-            if (version.getMajorVersion() == 0 && version.getMinorVersion() == 3 && version.getSnapshot() < 1) {
-                //adjust for conventional fighter pilots
-                if (retVal.primaryRole == T_CONV_PILOT && retVal.hasSkill(SkillType.S_PILOT_SPACE) && !retVal.hasSkill(SkillType.S_PILOT_JET)) {
-                    retVal.primaryRole += 1;
-                }
-                if (retVal.secondaryRole == T_CONV_PILOT && retVal.hasSkill(SkillType.S_PILOT_SPACE) && !retVal.hasSkill(SkillType.S_PILOT_JET)) {
-                    retVal.secondaryRole += 1;
-                }
-                if (retVal.primaryRole == T_AERO_PILOT && !retVal.hasSkill(SkillType.S_PILOT_SPACE) && retVal.hasSkill(SkillType.S_PILOT_JET)) {
-                    retVal.primaryRole += 8;
-                }
-                if (retVal.secondaryRole == T_AERO_PILOT && !retVal.hasSkill(SkillType.S_PILOT_SPACE) && retVal.hasSkill(SkillType.S_PILOT_JET)) {
-                    retVal.secondaryRole += 8;
-                }
             }
 
             if ((null != advantages) && (advantages.trim().length() > 0)) {
@@ -2314,8 +2259,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
                 retVal.setRankNumeric(0);
             }
         } catch (Exception e) {
-            MekHQ.getLogger().error(Person.class, "Failed to read person " + retVal.getFullName() + " from file");
-            MekHQ.getLogger().error(Person.class, e);
+            MekHQ.getLogger().error("Failed to read person " + retVal.getFullName() + " from file", e);
             retVal = null;
         }
 
@@ -2443,7 +2387,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
         if (rankSystem == -1) {
             ranks = null;
         } else {
-            ranks = new Ranks(rankSystem);
+            ranks = Ranks.getRanksFromSystem(rankSystem);
         }
         MekHQ.triggerEvent(new PersonChangedEvent(this));
     }
@@ -2452,7 +2396,7 @@ public class Person implements Serializable, MekHqXmlSerializable {
         if (rankSystem != -1) {
             // Null protection
             if (ranks == null) {
-                ranks = new Ranks(rankSystem);
+                ranks = Ranks.getRanksFromSystem(rankSystem);
             }
             return ranks;
         }
@@ -3093,9 +3037,12 @@ public class Person implements Serializable, MekHqXmlSerializable {
         }
     }
 
+    public void changeEdge(int amount) {
+        setEdge(Math.max(getEdge() + amount, 0));
+    }
+
     /**
      * Resets support personnel edge points to the purchased level. Used for weekly refresh.
-     *
      */
     public void resetCurrentEdge() {
         setCurrentEdge(getEdge());
@@ -3109,9 +3056,12 @@ public class Person implements Serializable, MekHqXmlSerializable {
         currentEdge = e;
     }
 
+    public void changeCurrentEdge(int amount) {
+        currentEdge = Math.max(currentEdge + amount, 0);
+    }
+
     /**
      *  Returns this person's currently available edge points. Used for weekly refresh.
-     *
      */
     public int getCurrentEdge() {
         return currentEdge;
@@ -3242,11 +3192,8 @@ public class Person implements Serializable, MekHqXmlSerializable {
 
     public int getMaintenanceTimeUsing() {
         int time = 0;
-        for (UUID id : getTechUnitIDs()) {
-            Unit u = campaign.getUnit(id);
-            if (null != u) {
-                time += u.getMaintenanceTime();
-            }
+        for (Unit u : getTechUnits()) {
+            time += u.getMaintenanceTime();
         }
         return time;
     }
@@ -3255,39 +3202,40 @@ public class Person implements Serializable, MekHqXmlSerializable {
         if (!isTech()) {
             return false;
         }
-        for (UUID unitId : techUnitIds) {
-            Unit u = campaign.getUnit(unitId);
-            if ((u != null) && u.isMothballing()) {
+        for (Unit u : techUnits) {
+            if (u.isMothballing()) {
                 return true;
             }
         }
         return false;
     }
 
-    public UUID getUnitId() {
-        return unitId;
+    public @Nullable Unit getUnit() {
+        return unit;
     }
 
-    public void setUnitId(UUID i) {
-        unitId = i;
+    public void setUnit(@Nullable Unit unit) {
+        this.unit = unit;
     }
 
-    public void removeTechUnitId(UUID i) {
-        techUnitIds.remove(i);
+    public void removeTechUnit(Unit unit) {
+        techUnits.remove(unit);
     }
 
-    public void addTechUnitID(UUID id) {
-        if (!techUnitIds.contains(id)) {
-            techUnitIds.add(id);
+    public void addTechUnit(Unit unit) {
+        Objects.requireNonNull(unit);
+
+        if (!techUnits.contains(unit)) {
+            techUnits.add(unit);
         }
     }
 
-    public void clearTechUnitIDs() {
-        techUnitIds.clear();
+    public void clearTechUnits() {
+        techUnits.clear();
     }
 
-    public List<UUID> getTechUnitIDs() {
-        return techUnitIds;
+    public List<Unit> getTechUnits() {
+        return Collections.unmodifiableList(techUnits);
     }
 
     public int getMinutesLeft() {
@@ -3296,13 +3244,10 @@ public class Person implements Serializable, MekHqXmlSerializable {
 
     public void setMinutesLeft(int m) {
         this.minutesLeft = m;
-        if (engineer && null != getUnitId()) {
+        if (engineer && (null != getUnit())) {
             //set minutes for all crewmembers
-            Unit u = campaign.getUnit(getUnitId());
-            if (null != u) {
-                for (Person p : u.getActiveCrew()) {
-                    p.setMinutesLeft(m);
-                }
+            for (Person p : getUnit().getActiveCrew()) {
+                p.setMinutesLeft(m);
             }
         }
     }
@@ -3313,13 +3258,10 @@ public class Person implements Serializable, MekHqXmlSerializable {
 
     public void setOvertimeLeft(int m) {
         this.overtimeLeft = m;
-        if (engineer && null != getUnitId()) {
+        if (engineer && (null != getUnit())) {
             //set minutes for all crewmembers
-            Unit u = campaign.getUnit(getUnitId());
-            if (null != u) {
-                for (Person p : u.getActiveCrew()) {
-                    p.setMinutesLeft(m);
-                }
+            for (Person p : getUnit().getActiveCrew()) {
+                p.setMinutesLeft(m);
             }
         }
     }
@@ -3562,10 +3504,6 @@ public class Person implements Serializable, MekHqXmlSerializable {
         }
     }
 
-    public int getOldId() {
-        return oldId;
-    }
-
     public int getNTasks() {
         return nTasks;
     }
@@ -3705,9 +3643,9 @@ public class Person implements Serializable, MekHqXmlSerializable {
     }
 
     public void addInjury(Injury i) {
-        injuries.add(i);
-        if (null != getUnitId()) {
-            campaign.getUnit(getUnitId()).resetPilotAndEntity();
+        injuries.add(Objects.requireNonNull(i));
+        if (null != getUnit()) {
+            getUnit().resetPilotAndEntity();
         }
     }
     //endregion injuries
@@ -3858,6 +3796,38 @@ public class Person implements Serializable, MekHqXmlSerializable {
             return MECHWARRIOR_AERO_RANSOM_VALUES.get(getExperienceLevel(false));
         } else {
             return OTHER_RANSOM_VALUES.get(getExperienceLevel(false));
+        }
+    }
+
+    public static class PersonUnitRef extends Unit {
+        private PersonUnitRef(UUID id) {
+            setId(id);
+        }
+    }
+
+    public void fixReferences(Campaign campaign) {
+        if (unit instanceof PersonUnitRef) {
+            UUID id = unit.getId();
+            unit = campaign.getUnit(id);
+            if (unit == null) {
+                MekHQ.getLogger().error(
+                    String.format("Person %s ('%s') references missing unit %s",
+                        getId(), getFullName(), id));
+            }
+        }
+        for (int ii = techUnits.size() - 1; ii >= 0; --ii) {
+            Unit techUnit = techUnits.get(ii);
+            if (techUnit instanceof PersonUnitRef) {
+                Unit realUnit = campaign.getUnit(techUnit.getId());
+                if (realUnit != null) {
+                    techUnits.set(ii, realUnit);
+                } else {
+                    MekHQ.getLogger().error(
+                        String.format("Person %s ('%s') techs missing unit %s",
+                            getId(), getFullName(), techUnit.getId()));
+                    techUnits.remove(ii);
+                }
+            }
         }
     }
 }

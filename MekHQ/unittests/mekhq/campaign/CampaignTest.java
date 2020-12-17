@@ -22,15 +22,22 @@ package mekhq.campaign;
 
 import mekhq.campaign.personnel.Person;
 import mekhq.campaign.personnel.enums.PersonnelStatus;
+import mekhq.campaign.personnel.ranks.Ranks;
+import mekhq.campaign.unit.Unit;
+
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
+
+import megamek.common.Dropship;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.mockito.Mockito.doReturn;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 /**
  * @author Deric Page (dericdotpageatgmaildotcom)
@@ -38,6 +45,11 @@ import static org.mockito.Mockito.doReturn;
  * @since 6/10/14 10:23 AM
  */
 public class CampaignTest {
+    @Before
+    public void setup() {
+        Ranks.initializeRankSystems();
+    }
+
     @Test
     public void testGetTechs() {
         final UUID testId = UUID.fromString("c8682a91-346f-49b0-9f1f-28e669ee4e95");
@@ -113,5 +125,40 @@ public class CampaignTest {
         expected.add(mockTechActive);
         expected.add(mockTechNoTime);
         Assert.assertEquals(expected, testCampaign.getTechs(false, testId, false, false));
+    }
+
+    @Test
+    public void testTransportShips() {
+        Campaign campaign = spy(new Campaign());
+
+        // New campaigns have no transports
+        assertTrue(campaign.getTransportShips().isEmpty());
+
+        // Create a mock transport
+        Dropship mockTransport = mock(Dropship.class);
+        UUID mockId = UUID.randomUUID();
+        Unit mockUnit = mock(Unit.class);
+        when(mockUnit.getId()).thenReturn(mockId);
+        when(mockUnit.getEntity()).thenReturn(mockTransport);
+
+        // Add our mock transport
+        campaign.addTransportShip(mockUnit);
+
+        // Ensure our mock transport exists
+        assertEquals(1, campaign.getTransportShips().size());
+        assertTrue(campaign.getTransportShips().contains(mockUnit));
+
+        // Add our mock transport a second time
+        campaign.addTransportShip(mockUnit);
+
+        // Ensure our mock transport exists only once
+        assertEquals(1, campaign.getTransportShips().size());
+        assertTrue(campaign.getTransportShips().contains(mockUnit));
+
+        // Remove the mock transport
+        campaign.removeTransportShip(mockUnit);
+
+        // Ensure it was removed
+        assertTrue(campaign.getTransportShips().isEmpty());
     }
 }

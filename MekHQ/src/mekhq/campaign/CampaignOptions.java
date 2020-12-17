@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import mekhq.Version;
 import mekhq.campaign.againstTheBot.enums.AtBLanceRole;
 import mekhq.campaign.personnel.enums.FamilialRelationshipDisplayLevel;
 import mekhq.campaign.personnel.enums.Phenotype;
@@ -230,7 +231,6 @@ public class CampaignOptions implements Serializable {
     private BabySurnameStyle babySurnameStyle;
     private boolean determineFatherAtBirth;
     private FamilialRelationshipDisplayLevel displayFamilyLevel;
-    private boolean useRandomDeaths;
     private boolean keepMarriedNameUponSpouseDeath;
 
     //salary
@@ -573,7 +573,6 @@ public class CampaignOptions implements Serializable {
         babySurnameStyle = BabySurnameStyle.MOTHERS;
         determineFatherAtBirth = false;
         displayFamilyLevel = FamilialRelationshipDisplayLevel.SPOUSE;
-        useRandomDeaths = true;
         keepMarriedNameUponSpouseDeath = true;
 
         //Salary
@@ -1493,22 +1492,6 @@ public class CampaignOptions implements Serializable {
      */
     public void setDisplayFamilyLevel(FamilialRelationshipDisplayLevel displayFamilyLevel) {
         this.displayFamilyLevel = displayFamilyLevel;
-    }
-
-    /**
-     * TODO : Finish implementing me
-     * @return whether or not to use random deaths
-     */
-    public boolean useRandomDeaths() {
-        return useRandomDeaths;
-    }
-
-    /**
-     * TODO : Finish implementing me
-     * @param b whether or not to use random deaths
-     */
-    public void setUseRandomDeaths(boolean b) {
-        useRandomDeaths = b;
     }
 
     /**
@@ -3185,7 +3168,6 @@ public class CampaignOptions implements Serializable {
         MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "babySurnameStyle", babySurnameStyle.name());
         MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "determineFatherAtBirth", determineFatherAtBirth);
         MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "displayFamilyLevel", displayFamilyLevel.name());
-        MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "useRandomDeaths", useRandomDeaths);
         MekHqXmlUtil.writeSimpleXmlTag(pw1, indent + 1, "keepMarriedNameUponSpouseDeath", keepMarriedNameUponSpouseDeath);
         //endregion family
 
@@ -3375,8 +3357,8 @@ public class CampaignOptions implements Serializable {
         MekHqXmlUtil.writeSimpleXMLCloseIndentedLine(pw1, --indent, "campaignOptions");
     }
 
-    public static CampaignOptions generateCampaignOptionsFromXml(Node wn) {
-        MekHQ.getLogger().info("Loading Campaign Options from XML...");
+    public static CampaignOptions generateCampaignOptionsFromXml(Node wn, Version version) {
+        MekHQ.getLogger().info("Loading Campaign Options from Version " + version.toString() + " XML...");
 
         wn.normalize();
         CampaignOptions retVal = new CampaignOptions();
@@ -3658,8 +3640,6 @@ public class CampaignOptions implements Serializable {
                 retVal.setDetermineFatherAtBirth(Boolean.parseBoolean(wn2.getTextContent().trim()));
             } else if (wn2.getNodeName().equalsIgnoreCase("displayFamilyLevel")) {
                 retVal.setDisplayFamilyLevel(FamilialRelationshipDisplayLevel.parseFromString(wn2.getTextContent().trim()));
-            } else if (wn2.getNodeName().equalsIgnoreCase("useRandomDeaths")) {
-                retVal.useRandomDeaths = Boolean.parseBoolean(wn2.getTextContent().trim());
             } else if (wn2.getNodeName().equalsIgnoreCase("keepMarriedNameUponSpouseDeath")) {
                 retVal.keepMarriedNameUponSpouseDeath = Boolean.parseBoolean(wn2.getTextContent().trim());
             //endregion Family
@@ -3787,7 +3767,9 @@ public class CampaignOptions implements Serializable {
             } else if (wn2.getNodeName().equalsIgnoreCase("salaryAntiMekMultiplier")) {
                 retVal.salaryAntiMekMultiplier = Double.parseDouble(wn2.getTextContent().trim());
             } else if (wn2.getNodeName().equalsIgnoreCase("salaryTypeBase")) {
-                retVal.salaryTypeBase = Utilities.readMoneyArray(wn2);
+                // CAW: we need at least the correct number of salaries as are expected in this version,
+                //      otherwise we'll not be able to set a salary for a role.
+                retVal.salaryTypeBase = Utilities.readMoneyArray(wn2, Person.T_NUM);
             } else if (wn2.getNodeName().equalsIgnoreCase("salaryXpMultiplier")) {
                 String[] values = wn2.getTextContent().split(",");
                 for (int i = 0; i < values.length; i++) {

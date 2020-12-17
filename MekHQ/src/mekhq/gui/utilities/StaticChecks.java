@@ -18,15 +18,15 @@
  */
 package mekhq.gui.utilities;
 
+import java.util.Objects;
 import java.util.StringJoiner;
-import java.util.UUID;
 import java.util.Vector;
 
 import megamek.common.Entity;
 import megamek.common.UnitType;
 import mekhq.campaign.force.Force;
 import mekhq.campaign.personnel.Person;
-import mekhq.campaign.personnel.Ranks;
+import mekhq.campaign.personnel.ranks.Ranks;
 import mekhq.campaign.unit.Unit;
 
 public class StaticChecks {
@@ -102,7 +102,7 @@ public class StaticChecks {
      */
     public static boolean areAllUnitsTransported(Vector<Unit> units) {
         for (Unit unit : units) {
-            if (!unit.hasTransportShipId()) {
+            if (!unit.hasTransportShipAssignment()) {
                 return false;
             }
         }
@@ -726,14 +726,15 @@ public class StaticChecks {
     }
 
     public static boolean allHaveSameUnit(Person[] people) {
-        UUID unitId = people[0].getUnitId();
-        for (Person person : people) {
-            if ((unitId == null && person.getUnitId() == null)
-                    || (person.getUnitId() != null && person.getUnitId()
-                            .equals(unitId))) {
-                continue;
-            }
+        if ((people == null) || (people.length == 0)) {
             return false;
+        }
+
+        Unit unit = people[0].getUnit();
+        for (Person person : people) {
+            if (!Objects.equals(unit, person.getUnit())) {
+                return false;
+            }
         }
         return true;
     }

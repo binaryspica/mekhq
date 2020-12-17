@@ -519,7 +519,7 @@ public class AcquisitionsDialog extends JDialog {
                 Part replacement = podded.findReplacement(false);
 
                 if (replacement != null) {
-                    campaignGUI.getCampaign().depodPart(replacement, 1);
+                    campaignGUI.getCampaign().getQuartermaster().depodPart(replacement, 1);
                     MekHQ.triggerEvent(new PartChangedEvent(replacement));
                 }
                 refresh();
@@ -539,7 +539,11 @@ public class AcquisitionsDialog extends JDialog {
                         actualWork = ((AmmoBin) targetWork).getAcquisitionWork();
                     }
 
-                    campaignGUI.getCampaign().addReport(actualWork.find(0));
+                    // GM find the actual number required
+                    for (int count = 0; count < partCountInfo.getMissingCount(); ++count) {
+                        campaignGUI.getCampaign().addReport(actualWork.find(0));
+                    }
+
                     Unit unit = actualWork.getUnit();
                     if (unit != null) {
                         MekHQ.triggerEvent(new UnitChangedEvent(unit));

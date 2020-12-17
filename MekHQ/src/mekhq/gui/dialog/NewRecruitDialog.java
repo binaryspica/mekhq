@@ -20,36 +20,31 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.ResourceBundle;
 
-import javax.swing.DefaultComboBoxModel;
-import javax.swing.JButton;
-import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.ScrollPaneConstants;
+import javax.swing.*;
 
 import megamek.client.generator.RandomNameGenerator;
+import megamek.client.ui.swing.dialog.imageChooser.AbstractIconChooserDialog;
+import megamek.client.ui.swing.dialog.imageChooser.PortraitChooserDialog;
 import megamek.common.enums.Gender;
 import megamek.common.util.EncodeControl;
-import mekhq.MHQStaticDirectoryManager;
 import mekhq.MekHQ;
 import mekhq.campaign.personnel.Person;
-import mekhq.campaign.personnel.Ranks;
+import mekhq.campaign.personnel.ranks.Ranks;
 import mekhq.gui.CampaignGUI;
 import mekhq.gui.preferences.JWindowPreference;
 import mekhq.gui.view.PersonViewPanel;
 import mekhq.preferences.PreferencesNode;
 
 public class NewRecruitDialog extends javax.swing.JDialog {
-
     /**
      * This dialog is used to both hire new pilots and to edit existing ones
-     *
      */
     private static final long serialVersionUID = -6265589976779860566L;
     private Person person;
 
     private CampaignGUI hqView;
 
-    private javax.swing.JComboBox<String> choiceRanks;
+    private JComboBox<String> choiceRanks;
 
     private JScrollPane scrollView;
 
@@ -233,12 +228,12 @@ public class NewRecruitDialog extends javax.swing.JDialog {
     }
 
     private void choosePortrait() {
-        ImageChoiceDialog pcd = new ImageChoiceDialog(hqView.getFrame(), true, person.getPortraitCategory(),
-                person.getPortraitFileName(), MHQStaticDirectoryManager.getPortraits());
-        pcd.setVisible(true);
-        person.setPortraitCategory(pcd.getCategory());
-        person.setPortraitFileName(pcd.getFileName());
-        refreshView();
+        AbstractIconChooserDialog portraitDialog = new PortraitChooserDialog(hqView.getFrame(), person.getPortrait());
+        int result = portraitDialog.showDialog();
+        if ((result == JOptionPane.OK_OPTION) && (portraitDialog.getSelectedItem() != null)) {
+            person.setPortrait(portraitDialog.getSelectedItem());
+            refreshView();
+        }
     }
 
     private void editPerson() {

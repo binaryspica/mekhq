@@ -981,8 +981,7 @@ public class Utilities {
 
             // Only created crew can be assigned a portrait, so this is safe to put in here
             if (!AbstractIcon.DEFAULT_ICON_FILENAME.equals(oldCrew.getPortraitFileName(crewIndex))) {
-                p.setPortraitCategory(oldCrew.getPortraitCategory(crewIndex));
-                p.setPortraitFileName(oldCrew.getPortraitFileName(crewIndex));
+                p.setPortrait(oldCrew.getPortrait(crewIndex));
             }
         }
     }
@@ -1079,11 +1078,19 @@ public class Utilities {
     }
 
     public static Money[] readMoneyArray(Node node) {
+        return readMoneyArray(node, 0);
+    }
+
+    public static Money[] readMoneyArray(Node node, int minimumSize) {
         String[] values = node.getTextContent().split(",");
-        Money[] result = new Money[values.length];
+        Money[] result = new Money[Math.max(values.length, minimumSize)];
 
         for (int i = 0; i < values.length; i++) {
             result[i] = Money.fromXmlString(values[i]);
+        }
+
+        for (int i = values.length; i < result.length; i++) {
+            result[i] = Money.zero();
         }
 
         return result;
@@ -1163,9 +1170,23 @@ public class Utilities {
                 etype = ((MissingEquipmentPart) part).getType();
             }
             if (null != etype) {
+                Mounted mounted = unit.getEntity().getEquipment(eqnum);
                 if (equipNums.contains(eqnum)
-                        && etype.equals(unit.getEntity().getEquipment(eqnum).getType())) {
+                        && etype.equals(mounted.getType())) {
                     equipNums.remove((Integer) eqnum);
+                } else if ((part instanceof AmmoBin)
+                        && (etype instanceof AmmoType)
+                        && (mounted.getType() instanceof AmmoType)) {
+                    // Handle AmmoBins which had their AmmoType changed
+                    // but did not get reloaded yet.
+                    AmmoBin ammoBin = (AmmoBin) part;
+                    AmmoType mountedType = (AmmoType) mounted.getType();
+                    if (mountedType.equalsAmmoTypeOnly(ammoBin.getType())
+                            && (mountedType.getRackSize() == ammoBin.getType().getRackSize())) {
+                        equipNums.remove((Integer) eqnum);
+                    } else {
+                        remaining.add(part);
+                    }
                 } else {
                     remaining.add(part);
                 }
@@ -1186,40 +1207,34 @@ public class Utilities {
                     i++;
                     Mounted m = unit.getEntity().getEquipment(equipNum);
                     if (part instanceof AmmoBin) {
-                        //If this is a refit, we want to update our ammo bin parts to match
-                        //the munitions specified in the refit, then reassign the equip number
+                        if (!(m.getType() instanceof AmmoType)) {
+                            continue;
+                        }
+
+                        AmmoBin ammoBin = (AmmoBin) part;
+                        AmmoType ammoType = (AmmoType) m.getType();
+
+                        // If this is a refit, we want to update our ammo bin parts to match
+                        // the munitions specified in the refit, then reassign the equip number
                         if (refit) {
-                            if (m.getType().equals(epart.getType()) && !m.isDestroyed()) {
-                                epart.setEquipmentNum(equipNum);
-                                AmmoBin bin = (AmmoBin) epart;
+                            if (ammoBin.getType().equalsAmmoTypeOnly(ammoType)
+                                    && (ammoType.getRackSize() == ammoBin.getType().getRackSize())
+                                    && !m.isDestroyed()) {
+                                ammoBin.setEquipmentNum(equipNum);
                                 // Ensure Entity is synch'd with part
-                                bin.updateConditionFromPart();
+                                ammoBin.updateConditionFromPart();
                                 // Unload bin before munition change
-                                bin.unload();
-                                bin.changeMunition(m.getType());
+                                ammoBin.unload();
+                                ammoBin.changeMunition(ammoType);
                                 found = true;
                                 break;
                             }
-                        } else {
-                            //If this is not a refit, make sure the munitions match
-                            if (m.getType() instanceof AmmoType) {
-                                if (((AmmoType) epart.getType()).getMunitionType()
-                                        != ((AmmoType) m.getType()).getMunitionType()) {
-                                    continue;
-                                }
-                                if (m.getType().equals(epart.getType()) && !m.isDestroyed()) {
-                                    epart.setEquipmentNum(equipNum);
-                                    found = true;
-                                    break;
-                                }
-                            }
                         }
-                    } else {
-                        if (m.getType().equals(epart.getType()) && !m.isDestroyed()) {
-                            epart.setEquipmentNum(equipNum);
-                            found = true;
-                            break;
-                        }
+                    }
+                    if (m.getType().equals(epart.getType()) && !m.isDestroyed()) {
+                        epart.setEquipmentNum(equipNum);
+                        found = true;
+                        break;
                     }
                 }
             } else if (part instanceof MissingEquipmentPart) {
@@ -1228,9 +1243,7 @@ public class Utilities {
                     i++;
                     Mounted m = unit.getEntity().getEquipment(equipNum);
                     if (part instanceof MissingAmmoBin
-                            && (!(m.getType() instanceof AmmoType)
-                            || (((AmmoType) epart.getType()).getMunitionType()
-                            != ((AmmoType) m.getType()).getMunitionType()))) {
+                            && !(m.getType() instanceof AmmoType)) {
                         continue;
                     }
                     if (m.getType().equals(epart.getType()) && !m.isDestroyed()) {
@@ -1241,7 +1254,7 @@ public class Utilities {
                 }
             }
 
-            if(found) {
+            if (found) {
                 equipNums.remove(i);
             } else {
                 notFound.add(part);
@@ -1293,7 +1306,7 @@ public class Utilities {
                 boolean isAvailable = equipNums.contains(equipNum);
                 builder.append(String.format(" %d: %s %s%s\r\n", equipNum, m.getName(), mType.getName(), isAvailable ? " (Available)" : ""));
             }
-            MekHQ.getLogger().warning(Utilities.class, builder.toString());
+            MekHQ.getLogger().warning(builder.toString());
         }
     }
 
@@ -1389,8 +1402,8 @@ public class Utilities {
             csvPrinter.close();
 
             report = model.getRowCount() + " " + resourceMap.getString("RowsWritten.text");
-        } catch(Exception ioe) {
-            MekHQ.getLogger().error(Utilities.class, "Error exporting JTable");
+        } catch (Exception ioe) {
+            MekHQ.getLogger().error("Error exporting JTable", ioe);
             report = "Error exporting JTable. See log for details.";
         }
         return report;

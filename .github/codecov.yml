@@ -1,0 +1,17 @@
+#
+# CodeCov.io Configuration
+# https://docs.codecov.io/docs/codecovyml-reference
+#
+
+#
+# https://docs.codecov.io/docs/fixing-paths
+#
+fixes:
+  - "mekhq/::"        # reduce root e.g., "before/path/" => "path/"
+
+github_checks:
+  #
+  # https://docs.codecov.io/docs/github-checks-beta#disabling-github-checks-patch-annotations-via-yaml
+  #
+  annotations: false
+ 
